@@ -77,18 +77,13 @@ def process(args):
         #
         if args.trimming_args:
             command = (
-                "trim_galore --paired --2colour 20"
-                + " --cores "
-                + str(int(args.cores))
-                + " "
-                + str(args.trimming_args).strip()
-                + " "
-                + " -o "
-                + str(args.trimgalore_output_dir).strip()
-                + " "
-                + "--basename "
-                + str(args.prefix)
-                + " "
+                "trim_galore --paired --2colour 20 --cores %s -o %s --basename %s %s "
+                % (
+                    str(int(args.cores)),
+                    str(args.trimgalore_output_dir).strip(),
+                    str(args.prefix),
+                    str(args.trimming_args).strip(),
+                )
                 + infile
                 + " || exit 1;"
             )
@@ -96,15 +91,12 @@ def process(args):
             os.system(command)
         else:
             command = (
-                "trim_galore --paired --2colour 20"
-                + " --cores "
-                + str(int(args.cores))
-                + " "
-                + str(args.trimgalore_output_dir).strip()
-                + " "
-                + "--basename "
-                + str(args.prefix)
-                + " "
+                "trim_galore --paired --2colour 20 --cores %s -o %s --basename %s "
+                % (
+                    str(int(args.cores)),
+                    str(args.trimgalore_output_dir).strip(),
+                    str(args.prefix),
+                )
                 + infile
                 + " || exit 1;"
             )
@@ -137,16 +129,34 @@ def process(args):
             print(message, file=sys.stderr)
             print(args.infile, file=sys.stderr)
             r1_input, r2_input = args.infile
-        command = (
-            "bwameth.py --reference %s -t %s %s %s | "
-            % (args.ref, args.cores, r1_input, r2_input)
-            + "sambamba view -t %s -F 'not secondary_alignment and not failed_quality_control and not supplementary and proper_pair and mapping_quality > 0' -f bam -S -l 0 /dev/stdin | "
-            % args.cores
-            + "sambamba sort -t %s -o %s/%s.bam /dev/stdin || exit 1;"
-            % (args.cores, args.bwameth_output_dir, args.prefix)
-            + "samtools index -@ %s %s/%s.bam || exit 1;"
-            % (args.cores, args.bwameth_output_dir, args.prefix)
-        )
+        if args.bwameth_args:
+            command = (
+                "bwameth.py --reference %s -t %s %s %s %s | "
+                % (
+                    args.ref,
+                    args.cores,
+                    str(args.bwameth_args).strip(),
+                    r1_input,
+                    r2_input,
+                )
+                + "sambamba view -t %s -F 'not secondary_alignment and not failed_quality_control and not supplementary and proper_pair and mapping_quality > 0' -f bam -S -l 0 /dev/stdin | "
+                % args.cores
+                + "sambamba sort -t %s -o %s/%s.bam /dev/stdin || exit 1;"
+                % (args.cores, args.bwameth_output_dir, args.prefix)
+                + "samtools index -@ %s %s/%s.bam || exit 1;"
+                % (args.cores, args.bwameth_output_dir, args.prefix)
+            )
+        else:
+            command = (
+                "bwameth.py --reference %s -t %s %s %s | "
+                % (args.ref, args.cores, r1_input, r2_input)
+                + "sambamba view -t %s -F 'not secondary_alignment and not failed_quality_control and not supplementary and proper_pair and mapping_quality > 0' -f bam -S -l 0 /dev/stdin | "
+                % args.cores
+                + "sambamba sort -t %s -o %s/%s.bam /dev/stdin || exit 1;"
+                % (args.cores, args.bwameth_output_dir, args.prefix)
+                + "samtools index -@ %s %s/%s.bam || exit 1;"
+                % (args.cores, args.bwameth_output_dir, args.prefix)
+            )
         disp("Running: %s\n" % command)
         os.system(command)
         disp("Complete: %s" % steps[2])
@@ -171,20 +181,37 @@ def process(args):
             print(message, file=sys.stderr)
             print(args.infile, file=sys.stderr)
             bam_input = args.infile[0]
-        command = (
-            "%s MarkDuplicates I=%s O=%s/%s.markup.bam R=%s M=%s/%s.markdup_raw_metrics \
-            SORTING_COLLECTION_SIZE_RATIO=0.15 ASSUME_SORT_ORDER=coordinate \
-            OPTICAL_DUPLICATE_PIXEL_DISTANCE=2500 MAX_RECORDS_IN_RAM=1000 || exit 1"
-            % (
-                args.picard_jar_path,
-                bam_input,
-                args.picard_output_dir,
-                args.prefix,
-                args.ref,
-                args.picard_output_dir,
-                args.prefix,
+        if args.picard_args:
+            command = (
+                "%s MarkDuplicates I=%s O=%s/%s.markup.bam R=%s M=%s/%s.markdup_raw_metrics \
+                SORTING_COLLECTION_SIZE_RATIO=0.15 ASSUME_SORT_ORDER=coordinate \
+                OPTICAL_DUPLICATE_PIXEL_DISTANCE=2500 MAX_RECORDS_IN_RAM=1000 %s || exit 1"
+                % (
+                    args.picard_jar_path,
+                    bam_input,
+                    args.picard_output_dir,
+                    args.prefix,
+                    args.ref,
+                    args.picard_output_dir,
+                    args.prefix,
+                    args.picard_args,
+                )
             )
-        )
+        else:
+            command = (
+                "%s MarkDuplicates I=%s O=%s/%s.markup.bam R=%s M=%s/%s.markdup_raw_metrics \
+                SORTING_COLLECTION_SIZE_RATIO=0.15 ASSUME_SORT_ORDER=coordinate \
+                OPTICAL_DUPLICATE_PIXEL_DISTANCE=2500 MAX_RECORDS_IN_RAM=1000 || exit 1"
+                % (
+                    args.picard_jar_path,
+                    bam_input,
+                    args.picard_output_dir,
+                    args.prefix,
+                    args.ref,
+                    args.picard_output_dir,
+                    args.prefix,
+                )
+            )
         disp("Running: %s\n" % command)
         os.system(command)
         disp("Complete: %s" % steps[3])
@@ -213,40 +240,97 @@ def process(args):
             print(message, file=sys.stderr)
             print(args.infile, file=sys.stderr)
             bam_input = args.infile[0]
-        command = (
-            "MethylDackel mbias -@ %s %s %s/%s.markup.bam %s/%s &> %s/%s_mbias_OT_OB.temp || exit 1;"
-            % (
-                args.cores,
-                args.ref,
-                args.picard_output_dir,
-                args.prefix,
-                args.methyldackel_output_dir,
-                args.prefix,
-                args.methyldackel_output_dir,
-                args.prefix,
+        if args.methyldackel_args:
+            command = (
+                "MethylDackel mbias -@ %s %s %s/%s.markup.bam %s/%s &> %s/%s_mbias_OT_OB.temp || exit 1;"
+                % (
+                    args.cores,
+                    args.ref,
+                    args.picard_output_dir,
+                    args.prefix,
+                    args.methyldackel_output_dir,
+                    args.prefix,
+                    args.methyldackel_output_dir,
+                    args.prefix,
+                )
+                + "MethylDackel extract --minDepth 10 --maxVariantFrac 0.25 -@ %s --OT $(cat %s/%s_mbias_OT_OB.temp | \
+                grep -oP '(?<=--OT )[^ ]+') --OB $(cat %s/%s_mbias_OT_OB.temp | \
+                grep -oP '(?<=--OB )[^ ]+') -o %s/%s --mergeContext %s \
+                %s %s/%s.markup.bam || exit 1;"
+                % (
+                    args.cores,
+                    args.methyldackel_output_dir,
+                    args.prefix,
+                    args.methyldackel_output_dir,
+                    args.prefix,
+                    args.methyldackel_output_dir,
+                    args.prefix,
+                    args.methyldackel_args,
+                    args.ref,
+                    args.methyldackel_output_dir,
+                    args.prefix,
+                )
             )
-            + "MethylDackel extract --minDepth 10 --maxVariantFrac 0.25 -@ %s --OT $(cat %s/%s_mbias_OT_OB.temp | \
-            grep -oP '(?<=--OT )[^ ]+') --OB $(cat %s/%s_mbias_OT_OB.temp | \
-            grep -oP '(?<=--OB )[^ ]+') -o %s/%s --mergeContext \
-            %s %s/%s.markup.bam || exit 1;"
-            % (
-                args.cores,
-                args.methyldackel_output_dir,
-                args.prefix,
-                args.methyldackel_output_dir,
-                args.prefix,
-                args.methyldackel_output_dir,
-                args.prefix,
-                args.ref,
-                args.methyldackel_output_dir,
-                args.prefix,
+        else:
+            command = (
+                "MethylDackel mbias -@ %s %s %s/%s.markup.bam %s/%s &> %s/%s_mbias_OT_OB.temp || exit 1;"
+                % (
+                    args.cores,
+                    args.ref,
+                    args.picard_output_dir,
+                    args.prefix,
+                    args.methyldackel_output_dir,
+                    args.prefix,
+                    args.methyldackel_output_dir,
+                    args.prefix,
+                )
+                + "MethylDackel extract --minDepth 10 --maxVariantFrac 0.25 -@ %s --OT $(cat %s/%s_mbias_OT_OB.temp | \
+                grep -oP '(?<=--OT )[^ ]+') --OB $(cat %s/%s_mbias_OT_OB.temp | \
+                grep -oP '(?<=--OB )[^ ]+') -o %s/%s --mergeContext \
+                %s %s/%s.markup.bam || exit 1;"
+                % (
+                    args.cores,
+                    args.methyldackel_output_dir,
+                    args.prefix,
+                    args.methyldackel_output_dir,
+                    args.prefix,
+                    args.methyldackel_output_dir,
+                    args.prefix,
+                    args.ref,
+                    args.methyldackel_output_dir,
+                    args.prefix,
+                )
             )
-        )
         disp("Running: %s\n" % command)
         os.system(command)
         disp("Complete: %s" % steps[4])
-        disp("Merging methylation matrix...")
         
+    if 5 in args.step:
+        disp("Start: %s" % steps[4])
+        output_dir = args.danpos_output_dir
+        if os.path.exists(args.danpos_output_dir):
+            disp("Outputting to: %s" % args.danpos_output_dir)
+        else:
+            disp(
+                "%s doesn't exist. Creating it for you." % args.danpos_output_dir
+            )
+            os.mkdir(args.danpos_output_dir)
+        disp("Output:\n")
+        print(
+            "%s_CpG.bedGraph" % args.prefix,
+            file=sys.stderr,
+        )
+        if 3 in args.step:
+            bam_input = (
+                str(args.picard_output_dir).strip() + "/%s.markup.bam" % args.prefix
+            )
+        else:
+            message = "Processing sample(s):\n"
+            print(message, file=sys.stderr)
+            print(args.infile, file=sys.stderr)
+            bam_input = args.infile[0]
+        disp("Completing all processes.")
+
 
 """
 sambamba_filter='not failed_quality_control and not supplementary and proper_pair and mapping_quality > 0'
@@ -296,6 +380,32 @@ ${hg38_ref} \
 ${bwameth_output_dir}/${sample_id}_sorted.markdup.bam || exit 1;
 
 
+
+files=$(find /dfs4/weil21-lab1/chaoronc/project/2023-Prostate_cancer_recurrence/result/4.methyldackel -type f -name "*_methylome_processed.bedgraph")
+for file in $files
+do
+  bedtools intersect -b /dfs4/weil21-lab1/chaoronc/project/2023-Prostate_cancer_recurrence/data/TWIST/covered_targets_Twist_Methylome_hg38_annotated_collapsed.bed -a ${file} | awk -v OFS="\t" '{print $1"_"$2"_"$3, $4}' > ${file}.overlap
+done
+
+
+module load bedtools2
+
+bedtools intersect -b ~/project/2023-Prostate_cancer_recurrence/data/TWIST/covered_targets_Twist_Methylome_hg38_annotated_collapsed.bed -a /dfs4/weil21-lab1/chaoronc/project/2023-Prostate_cancer_recurrence/result/4.methyldackel/A11_S1_methylome_processed.bedgraph > /dfs4/weil21-lab1/chaoronc/project/2023-Prostate_cancer_recurrence/result/4.methyldackel/A11_S1_methylome_processed.overlapped.bedgraph
+
+
+danpos_dir='/dfs5/weil21-lab2/chaoronc/tool/DANPOS3'
+
+python ${danpos_dir}/danpos.py dpos ${bwameth_output_dir}/${sample_id}_sorted.markdup.bam \
+--paired 1 \
+-u 0 \
+-c 1000000 \
+-o ${danpos_output_dir} || exit 1;
+
+wigToBigWig -clip ${danpos_output_dir}/pooled/${sample_id}*wig /dfs5/weil21-lab2/chaoronc/reference_genome/hg38/hg38.chrom.sizes ${danpos_output_dir}/pooled/${sample_id}.bw || exit 1;
+
+region_file=/dfs4/weil21-lab1/chaoronc/project/2023-Prostate_cancer_recurrence/data/TWIST/covered_targets_Twist_Methylome_hg38_annotated_collapsed_TSS_PAS_1kb_.bed
+
+bigWigAverageOverBed ${danpos_output_dir}/pooled/${sample_id}.bw $region_file ${danpos_output_dir}/${sample_id}.occupancy.tsv || exit 1;
 
 """
 

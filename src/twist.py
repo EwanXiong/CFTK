@@ -164,6 +164,8 @@ process_parser.add_argument(
     default=os.getcwd() + "/danpos_output",
 )
 
+merge_parser = subparsers.add_parser("merge", help="Merge")
+
 
 args = parser.parse_args()
 if args.mode == "init":
