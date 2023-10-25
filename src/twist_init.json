@@ -1,0 +1,29 @@
+{
+  "mode": "process",
+  "output_dir": "/Users/crchen/Wei Li Lab Dropbox/ChaoRong Chen/Research/Project/TWIST/src",
+  "input_dir": null,
+  "ref": "./test.fa",
+  "keep_temp": false,
+  "picard_jar_path": "picard.jar",
+  "infile": [
+    "./test.input_001",
+    "./test.input_002"
+  ],
+  "step": [
+    2,
+    3
+  ],
+  "qc_step": null,
+  "prefix": "test.input_001",
+  "cores": 1,
+  "trimming_args": null,
+  "trimgalore_output_dir": "/Users/crchen/Wei Li Lab Dropbox/ChaoRong Chen/Research/Project/TWIST/src/trimgalore_output",
+  "bwameth_args": "",
+  "bwameth_output_dir": "/Users/crchen/Wei Li Lab Dropbox/ChaoRong Chen/Research/Project/TWIST/src/bwameth_output",
+  "picard_args": "",
+  "picard_output_dir": "/Users/crchen/Wei Li Lab Dropbox/ChaoRong Chen/Research/Project/TWIST/src/picard_output",
+  "methyldackel_args": "",
+  "methyldackel_output_dir": "/Users/crchen/Wei Li Lab Dropbox/ChaoRong Chen/Research/Project/TWIST/src/methyldackel_output",
+  "danpos_args": "",
+  "danpos_output_dir": "/Users/crchen/Wei Li Lab Dropbox/ChaoRong Chen/Research/Project/TWIST/src/danpos_output"
+}
