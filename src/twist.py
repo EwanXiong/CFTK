@@ -89,16 +89,6 @@ process_parser.add_argument(
 )
 
 process_parser.add_argument(
-    "--qc",
-    dest="qc_step",
-    type=str,
-    nargs="+",
-    help="Step of quality control: [1. fragment length distribution, 2. dinucleotide frequency along 147bp fragments, 3. methyaltion beta value distribution]",
-    default=None,
-    choices=range(1, 5),
-)
-
-process_parser.add_argument(
     "--prefix", dest="prefix", type=str, help="Prefix for output files.", default=None
 )
 

@@ -189,9 +189,9 @@ def process(args):
                 )
                 + "sambamba view -t %s -F 'not secondary_alignment and not failed_quality_control and not supplementary and proper_pair and mapping_quality > 0' -f bam -S -l 0 /dev/stdin | "
                 % args.cores
-                + "sambamba sort -t %s -o %s/%s.bam /dev/stdin || exit 1;"
+                + "sambamba sort -t %s -o %s/%s.bam /dev/stdin;"
                 % (args.cores, args.bwameth_output_dir, args.prefix)
-                + "samtools index -@ %s %s/%s.bam || exit 1;"
+                + "samtools index -@ %s %s/%s.bam;"
                 % (args.cores, args.bwameth_output_dir, args.prefix)
             )
         else:
@@ -200,9 +200,9 @@ def process(args):
                 % (args.ref, args.cores, r1_input, r2_input)
                 + "sambamba view -t %s -F 'not secondary_alignment and not failed_quality_control and not supplementary and proper_pair and mapping_quality > 0' -f bam -S -l 0 /dev/stdin | "
                 % args.cores
-                + "sambamba sort -t %s -o %s/%s.bam /dev/stdin || exit 1;"
+                + "sambamba sort -t %s -o %s/%s.bam /dev/stdin;"
                 % (args.cores, args.bwameth_output_dir, args.prefix)
-                + "samtools index -@ %s %s/%s.bam || exit 1;"
+                + "samtools index -@ %s %s/%s.bam;"
                 % (args.cores, args.bwameth_output_dir, args.prefix)
             )
         disp("Running:\n %s\n" % command)
