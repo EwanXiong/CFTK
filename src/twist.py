@@ -60,7 +60,7 @@ init_parser.add_argument(
     dest="picard_jar_path",
     action="store_true",
     help="Path to picard.jar.",
-    default="picard.jar",
+    default="picard",
 )
 
 init_parser.add_argument(
