@@ -37,8 +37,10 @@ def init(args):
             % args.output_dir
         )
     if args.ref_index:
-        disp("Indexing reference genome.")
-        command = "bwameth.py index %s;" % args.ref + "samtools faidx %s > %s.fai" % (
+        disp("Indexing reference genome.\n\n")
+        command = "bwameth.py index %s;" % args.ref 
+        os.system(command)
+        command = "samtools faidx %s > %s.fai" % (
             args.ref,
             args.ref,
         )
