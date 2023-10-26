@@ -3,6 +3,7 @@ import numpy as np
 import time, sys, os, json, argparse, subprocess, re, glob
 import seaborn as sns
 import matplotlib.pyplot as plt
+import shlex, subprocess
 
 steps = {
     1: "trimming(trim_galore)",
@@ -18,6 +19,12 @@ command = ""
 def disp(txt):
     print("@%s \t%s" % (time.asctime(), txt), file=sys.stderr)
 
+def run_command(cmd):
+    args = shlex.split(cmd)
+    print(args)
+    p = subprocess.Popen(args)
+
+p = subprocess.Popen(args)
 
 def Merge(dict1, dict2):
     res = {**dict1, **dict2}
@@ -38,12 +45,14 @@ def init(args):
         )
     if args.ref_index:
         disp("Indexing reference genome.\n\n")
-        command = "bwameth.py index %s;" % args.ref 
+        command = "bwameth.py index %s;" % args.ref
+        disp("Running:\n %s\n" % command)
         os.system(command)
         command = "samtools faidx %s > %s.fai" % (
             args.ref,
             args.ref,
         )
+        disp("Running:\n %s\n" % command)
         os.system(command)
     else:
         disp("Skip indexing reference genome.")
@@ -129,7 +138,7 @@ def process(args):
                 + " || exit 1;"
             )
             disp("Running:\n %s\n" % command)
-            ##os.system(command)
+            os.system(command)
         else:
             command = (
                 "trim_galore --paired --2colour 20 --cores %s -o %s --basename %s "
@@ -142,7 +151,7 @@ def process(args):
                 + " || exit 1;"
             )
             disp("Running:\n %s\n" % command)
-            # os.system(command)
+            os.system(command)
         disp("Complete: %s" % steps[1])
 
     if 2 in args.step:
