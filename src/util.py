@@ -189,9 +189,9 @@ def process(args):
                 )
                 + "sambamba view -t %s -F 'not secondary_alignment and not failed_quality_control and not supplementary and proper_pair and mapping_quality > 0' -f bam -S -l 0 /dev/stdin | "
                 % args.cores
-                + "sambamba sort -t %s -o %s/%s.bam /dev/stdin;"
+                + "sambamba sort -t %s -o %s/%s.bam /dev/stdin || exit 1;"
                 % (args.cores, args.bwameth_output_dir, args.prefix)
-                + "samtools index -@ %s %s/%s.bam;"
+                + "samtools index -@ %s %s/%s.bam || exit 1;"
                 % (args.cores, args.bwameth_output_dir, args.prefix)
             )
         else:
@@ -200,13 +200,13 @@ def process(args):
                 % (args.ref, args.cores, r1_input, r2_input)
                 + "sambamba view -t %s -F 'not secondary_alignment and not failed_quality_control and not supplementary and proper_pair and mapping_quality > 0' -f bam -S -l 0 /dev/stdin | "
                 % args.cores
-                + "sambamba sort -t %s -o %s/%s.bam /dev/stdin;"
+                + "sambamba sort -t %s -o %s/%s.bam /dev/stdin || exit 1;"
                 % (args.cores, args.bwameth_output_dir, args.prefix)
-                + "samtools index -@ %s %s/%s.bam;"
+                + "samtools index -@ %s %s/%s.bam || exit 1;"
                 % (args.cores, args.bwameth_output_dir, args.prefix)
             )
         disp("Running:\n %s\n" % command)
-        # os.system(command)
+        os.system(command)
         disp("Complete: %s" % steps[2])
 
     if 3 in args.step:
@@ -261,7 +261,7 @@ def process(args):
                 )
             )
         disp("Running:\n %s\n" % command)
-        # os.system(command)
+        os.system(command)
         disp("Complete: %s" % steps[3])
 
     if 4 in args.step:
@@ -350,7 +350,7 @@ def process(args):
                 )
             )
         disp("Running:\n %s\n" % command)
-        # os.system(command)
+        os.system(command)
         disp("Complete: %s" % steps[4])
 
     if 5 in args.step:
@@ -381,7 +381,7 @@ def process(args):
             bam_input,
             args.danpos_output_dir,
         )
-        # os.system(command)
+        os.system(command)
         disp("Complete: %s" % steps[5])
 
     disp("Completing all processes.")
