@@ -23,9 +23,7 @@ def run_command(cmd):
     args = shlex.split(cmd)
     print(args)
     p = subprocess.Popen(args)
-
-p = subprocess.Popen(args)
-
+    
 def Merge(dict1, dict2):
     res = {**dict1, **dict2}
     return res
