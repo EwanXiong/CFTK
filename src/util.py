@@ -292,12 +292,11 @@ def process(args):
             bam_input = args.infile[0]
         if args.methyldackel_args:
             command = (
-                "MethylDackel mbias -@ %s %s %s/%s.markup.bam %s/%s &> %s/%s_mbias_OT_OB.temp || exit 1;"
+                "MethylDackel mbias -@ %s %s %s %s/%s &> %s/%s_mbias_OT_OB.temp || exit 1;"
                 % (
                     args.cores,
                     args.ref,
-                    args.picard_output_dir,
-                    args.prefix,
+                    bam_input,
                     args.methyldackel_output_dir,
                     args.prefix,
                     args.methyldackel_output_dir,
@@ -306,7 +305,7 @@ def process(args):
                 + "MethylDackel extract --minDepth 10 --maxVariantFrac 0.25 -@ %s --OT $(cat %s/%s_mbias_OT_OB.temp | \
                 grep -oP '(?<=--OT )[^ ]+') --OB $(cat %s/%s_mbias_OT_OB.temp | \
                 grep -oP '(?<=--OB )[^ ]+') -o %s/%s --mergeContext %s \
-                %s %s/%s.markup.bam || exit 1;"
+                %s %s || exit 1;"
                 % (
                     args.cores,
                     args.methyldackel_output_dir,
@@ -317,31 +316,36 @@ def process(args):
                     args.prefix,
                     args.methyldackel_args,
                     args.ref,
-                    args.methyldackel_output_dir,
-                    args.prefix,
+                    bam_input,
                 )
             )
         else:
-            command = "MethylDackel mbias -@ %s %s %s/%s.markup.bam %s/%s &> %s/%s_mbias_OT_OB.temp;" % (
-                args.cores,
-                args.ref,
-                args.picard_output_dir,
-                args.prefix,
-                args.methyldackel_output_dir,
-                args.prefix,
-                args.methyldackel_output_dir,
-                args.prefix,
-            ) + "MethylDackel extract --minDepth 10 --maxVariantFrac 0.25 -@ %s --OT $(cat %s/%s_mbias_OT_OB.temp | grep -oP '(?<=--OT )[^ ]+') --OB $(cat %s/%s_mbias_OT_OB.temp | grep -oP '(?<=--OB )[^ ]+') -o %s/%s --mergeContext %s %s/%s.markup.bam || exit 1;" % (
-                args.cores,
-                args.methyldackel_output_dir,
-                args.prefix,
-                args.methyldackel_output_dir,
-                args.prefix,
-                args.methyldackel_output_dir,
-                args.prefix,
-                args.ref,
-                args.methyldackel_output_dir,
-                args.prefix,
+            command = (
+                "MethylDackel mbias -@ %s %s %s %s/%s &> %s/%s_mbias_OT_OB.temp || exit 1;"
+                % (
+                    args.cores,
+                    args.ref,
+                    bam_input,
+                    args.methyldackel_output_dir,
+                    args.prefix,
+                    args.methyldackel_output_dir,
+                    args.prefix,
+                )
+                + "MethylDackel extract --minDepth 10 --maxVariantFrac 0.25 -@ %s --OT $(cat %s/%s_mbias_OT_OB.temp | \
+                grep -oP '(?<=--OT )[^ ]+') --OB $(cat %s/%s_mbias_OT_OB.temp | \
+                grep -oP '(?<=--OB )[^ ]+') -o %s/%s --mergeContext \
+                %s %s || exit 1;"
+                % (
+                    args.cores,
+                    args.methyldackel_output_dir,
+                    args.prefix,
+                    args.methyldackel_output_dir,
+                    args.prefix,
+                    args.methyldackel_output_dir,
+                    args.prefix,
+                    args.ref,
+                    bam_input,
+                )
             )
         disp("Running:\n %s\n" % command)
         os.system(command)
