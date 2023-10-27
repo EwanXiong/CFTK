@@ -235,7 +235,7 @@ def process(args):
             command = (
                 "%s MarkDuplicates I=%s O=%s/%s.markup.bam R=%s M=%s/%s.markdup_raw_metrics \
                 SORTING_COLLECTION_SIZE_RATIO=0.15 ASSUME_SORT_ORDER=coordinate \
-                OPTICAL_DUPLICATE_PIXEL_DISTANCE=2500 MAX_RECORDS_IN_RAM=1000 %s || exit 1"
+                OPTICAL_DUPLICATE_PIXEL_DISTANCE=2500 MAX_RECORDS_IN_RAM=1000 %s || exit 1;"
                 % (
                     args.picard_jar_path,
                     bam_input,
@@ -246,12 +246,14 @@ def process(args):
                     args.prefix,
                     args.picard_args,
                 )
+                + "samtools index -@ %s/%s.markup.bam"
+                % (args.picard_output_dir, args.prefix)
             )
         else:
             command = (
                 "%s MarkDuplicates I=%s O=%s/%s.markup.bam R=%s M=%s/%s.markdup_raw_metrics \
                 SORTING_COLLECTION_SIZE_RATIO=0.15 ASSUME_SORT_ORDER=coordinate \
-                OPTICAL_DUPLICATE_PIXEL_DISTANCE=2500 MAX_RECORDS_IN_RAM=1000 || exit 1"
+                OPTICAL_DUPLICATE_PIXEL_DISTANCE=2500 MAX_RECORDS_IN_RAM=1000 || exit 1;"
                 % (
                     args.picard_jar_path,
                     bam_input,
@@ -261,6 +263,8 @@ def process(args):
                     args.picard_output_dir,
                     args.prefix,
                 )
+                + "samtools index -@ %s/%s.markup.bam"
+                % (args.picard_output_dir, args.prefix)
             )
         disp("Running:\n %s\n" % command)
         os.system(command)
