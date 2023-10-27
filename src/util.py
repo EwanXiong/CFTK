@@ -19,11 +19,13 @@ command = ""
 def disp(txt):
     print("@%s \t%s" % (time.asctime(), txt), file=sys.stderr)
 
+
 def run_command(cmd):
     args = shlex.split(cmd)
     print(args)
     p = subprocess.Popen(args)
-    
+
+
 def Merge(dict1, dict2):
     res = {**dict1, **dict2}
     return res
@@ -320,34 +322,26 @@ def process(args):
                 )
             )
         else:
-            command = (
-                "MethylDackel mbias -@ %s %s %s/%s.markup.bam %s/%s &> %s/%s_mbias_OT_OB.temp || exit 1;"
-                % (
-                    args.cores,
-                    args.ref,
-                    args.picard_output_dir,
-                    args.prefix,
-                    args.methyldackel_output_dir,
-                    args.prefix,
-                    args.methyldackel_output_dir,
-                    args.prefix,
-                )
-                + "MethylDackel extract --minDepth 10 --maxVariantFrac 0.25 -@ %s --OT $(cat %s/%s_mbias_OT_OB.temp | \
-                grep -oP '(?<=--OT )[^ ]+') --OB $(cat %s/%s_mbias_OT_OB.temp | \
-                grep -oP '(?<=--OB )[^ ]+') -o %s/%s --mergeContext \
-                %s %s/%s.markup.bam || exit 1;"
-                % (
-                    args.cores,
-                    args.methyldackel_output_dir,
-                    args.prefix,
-                    args.methyldackel_output_dir,
-                    args.prefix,
-                    args.methyldackel_output_dir,
-                    args.prefix,
-                    args.ref,
-                    args.methyldackel_output_dir,
-                    args.prefix,
-                )
+            command = "MethylDackel mbias -@ %s %s %s/%s.markup.bam %s/%s &> %s/%s_mbias_OT_OB.temp;" % (
+                args.cores,
+                args.ref,
+                args.picard_output_dir,
+                args.prefix,
+                args.methyldackel_output_dir,
+                args.prefix,
+                args.methyldackel_output_dir,
+                args.prefix,
+            ) + "MethylDackel extract --minDepth 10 --maxVariantFrac 0.25 -@ %s --OT $(cat %s/%s_mbias_OT_OB.temp | grep -oP '(?<=--OT )[^ ]+') --OB $(cat %s/%s_mbias_OT_OB.temp | grep -oP '(?<=--OB )[^ ]+') -o %s/%s --mergeContext %s %s/%s.markup.bam || exit 1;" % (
+                args.cores,
+                args.methyldackel_output_dir,
+                args.prefix,
+                args.methyldackel_output_dir,
+                args.prefix,
+                args.methyldackel_output_dir,
+                args.prefix,
+                args.ref,
+                args.methyldackel_output_dir,
+                args.prefix,
             )
         disp("Running:\n %s\n" % command)
         os.system(command)
@@ -564,7 +558,7 @@ def qc(args):
                     delimiter="\t",
                     fmt="%s",
                 )
-        
+
     disp("QC completed.")
 
 
