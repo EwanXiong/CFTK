@@ -168,12 +168,20 @@ def process(args):
             file=sys.stderr,
         )
         if 1 in args.step:
-            r1_input = (
-                str(args.trimgalore_output_dir).strip() + "/%s_val_1.fq" % args.prefix
-            )
-            r2_input = (
-                str(args.trimgalore_output_dir).strip() + "/%s_val_2.fq" % args.prefix
-            )
+            if args.infile[0].endswith('.gz') and args.infile[1].endswith('.gz'):
+                r1_input = (
+                    str(args.trimgalore_output_dir).strip() + "/%s_val_1.fq.gz" % args.prefix
+                )
+                r2_input = (
+                    str(args.trimgalore_output_dir).strip() + "/%s_val_2.fq.gz" % args.prefix
+                )
+            else:
+                r1_input = (
+                    str(args.trimgalore_output_dir).strip() + "/%s_val_1.fq" % args.prefix
+                )
+                r2_input = (
+                    str(args.trimgalore_output_dir).strip() + "/%s_val_2.fq" % args.prefix
+                )
         else:
             message = "Processing sample(s):\n"
             print(message, file=sys.stderr)
