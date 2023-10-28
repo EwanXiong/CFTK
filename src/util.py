@@ -246,7 +246,7 @@ def process(args):
                     args.prefix,
                     args.picard_args,
                 )
-                + "samtools index -@ %s/%s.markup.bam"
+                + "samtools index -@ %s/%s.markup.bam|| exit 1;"
                 % (args.picard_output_dir, args.prefix)
             )
         else:
@@ -263,7 +263,7 @@ def process(args):
                     args.picard_output_dir,
                     args.prefix,
                 )
-                + "samtools index -@ %s/%s.markup.bam"
+                + "samtools index -@ %s/%s.markup.bam|| exit 1;"
                 % (args.picard_output_dir, args.prefix)
             )
         disp("Running:\n %s\n" % command)
