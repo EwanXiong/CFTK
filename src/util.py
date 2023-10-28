@@ -168,19 +168,23 @@ def process(args):
             file=sys.stderr,
         )
         if 1 in args.step:
-            if args.infile[0].endswith('.gz') and args.infile[1].endswith('.gz'):
+            if args.infile[0].endswith(".gz") and args.infile[1].endswith(".gz"):
                 r1_input = (
-                    str(args.trimgalore_output_dir).strip() + "/%s_val_1.fq.gz" % args.prefix
+                    str(args.trimgalore_output_dir).strip()
+                    + "/%s_val_1.fq.gz" % args.prefix
                 )
                 r2_input = (
-                    str(args.trimgalore_output_dir).strip() + "/%s_val_2.fq.gz" % args.prefix
+                    str(args.trimgalore_output_dir).strip()
+                    + "/%s_val_2.fq.gz" % args.prefix
                 )
             else:
                 r1_input = (
-                    str(args.trimgalore_output_dir).strip() + "/%s_val_1.fq" % args.prefix
+                    str(args.trimgalore_output_dir).strip()
+                    + "/%s_val_1.fq" % args.prefix
                 )
                 r2_input = (
-                    str(args.trimgalore_output_dir).strip() + "/%s_val_2.fq" % args.prefix
+                    str(args.trimgalore_output_dir).strip()
+                    + "/%s_val_2.fq" % args.prefix
                 )
         else:
             message = "Processing sample(s):\n"
@@ -254,8 +258,8 @@ def process(args):
                     args.prefix,
                     args.picard_args,
                 )
-                + "samtools index -@ %s/%s.markup.bam|| exit 1;"
-                % (args.picard_output_dir, args.prefix)
+                + "samtools index -@ %s %s/%s.markup.bam|| exit 1;"
+                % (args.cores, args.picard_output_dir, args.prefix)
             )
         else:
             command = (
@@ -271,8 +275,8 @@ def process(args):
                     args.picard_output_dir,
                     args.prefix,
                 )
-                + "samtools index -@ %s/%s.markup.bam|| exit 1;"
-                % (args.picard_output_dir, args.prefix)
+                + "samtools index -@ %s %s/%s.markup.bam|| exit 1;"
+                % (args.cores, args.picard_output_dir, args.prefix)
             )
         disp("Running:\n %s\n" % command)
         os.system(command)
