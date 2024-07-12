@@ -10,7 +10,8 @@ steps = {
     2: "alignment and sorting(bwameth and Samtools)",
     3: "mark duplicates(Picard)",
     4: "methylation ratio calling(MethylDackel)",
-    5: "nucleosome occupancy calculation(DANPOS2)",
+    5: "nucleosome occupancy calculation(DANPOS3)",
+    6: "window protection score calculation"
 }
 message = ""
 command = ""

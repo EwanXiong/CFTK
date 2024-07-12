@@ -70,8 +70,9 @@ init_parser.add_argument(
     help="",
     default="danpos.py",
 )
-# process
 
+
+# process
 process_parser = subparsers.add_parser("process", help="Processes")
 process_parser.add_argument(
     "infile", type=str, help="input file", nargs="+"
