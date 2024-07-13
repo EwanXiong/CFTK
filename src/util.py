@@ -11,7 +11,7 @@ steps = {
     3: "mark duplicates(Picard)",
     4: "methylation ratio calling(MethylDackel)",
     5: "nucleosome occupancy calculation(DANPOS3)",
-    6: "window protection score calculation"
+    6: "window protection score calculation",
 }
 message = ""
 command = ""
@@ -385,20 +385,38 @@ def process(args):
             bam_input = (
                 str(args.picard_output_dir).strip() + "/%s.markup.bam" % args.prefix
             )
+            danpos_wig_output = "%s/pooled/%s.markdup.Fnor.smooth.wig" % (
+                args.danpos_output_dir,
+                args.prefix,
+            )
         else:
             message = "Processing sample(s):\n"
             print(message, file=sys.stderr)
             print(args.infile, file=sys.stderr)
             bam_input = args.infile[0]
-
-        command = "python %s dpos %s --paired 1 -u 0 -c 1000000 -o %s || exit 1;" % (
-            args.danpos_path,
-            bam_input,
-            args.danpos_output_dir,
+            danpos_wig_output = "%s/pooled/%s.Fnor.smooth.wig" % (
+                args.danpos_output_dir,
+                bam_input.split("/")[-1].rsplit(".", 1)[0],
+            )
+        chrom_sizes = "../hg38.chrom.sizes"
+        region_file = "../hg38_annotated_collapsed_TSS_PAS_1kb.bed"
+        command = (
+            "python %s dpos %s --paired 1 -u 0 -c 1000000 -o %s && \
+            wigToBigWig -clip %s %s | \
+            bigWigAverageOverBed %s %s/%s.occupancy.tsv || exit 1;"
+            % (
+                args.danpos_path,
+                bam_input,
+                args.danpos_output_dir,
+                danpos_wig_output,
+                chrom_sizes,
+                region_file,
+                args.danpos_path,
+                args.prefix,
+            )
         )
         os.system(command)
         disp("Complete: %s" % steps[5])
-
     disp("Completing all processes.")
 
 
