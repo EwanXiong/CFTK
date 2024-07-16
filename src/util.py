@@ -415,6 +415,7 @@ def process(args):
                 args.prefix,
             )
         )
+        disp("Running:\n %s\n" % command)
         os.system(command)
         disp("Complete: %s" % steps[5])
     disp("Completing all processes.")
