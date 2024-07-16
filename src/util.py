@@ -369,7 +369,7 @@ def process(args):
         disp("Complete: %s" % steps[4])
 
     if 5 in args.step:
-        disp("Start: %s" % steps[4])
+        disp("Start: %s" % steps[5])
         output_dir = args.danpos_output_dir
         if os.path.exists(args.danpos_output_dir):
             disp("Outputting to: %s" % args.danpos_output_dir)
