@@ -402,8 +402,8 @@ def process(args):
         region_file = "../hg38_annotated_collapsed_TSS_PAS_1kb.bed"
         command = (
             "python %s dpos %s --paired 1 -u 0 -c 1000000 -o %s && \
-            wigToBigWig -clip %s %s | \
-            bigWigAverageOverBed %s %s/%s.occupancy.tsv || exit 1;"
+            ./wigToBigWig -clip %s %s | \
+            ./bigWigAverageOverBed %s %s/%s.occupancy.tsv || exit 1;"
             % (
                 args.danpos_path,
                 bam_input,
