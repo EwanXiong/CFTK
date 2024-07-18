@@ -414,7 +414,6 @@ def process(args):
                 args.danpos_output_dir,
                 bam_input.split("/")[-1].rsplit(".", 1)[0],
             )
-        import os
         src_path = os.path.dirname(__file__)
         chrom_sizes = os.path.dirname(src_path)+"/hg38.chrom.sizes"
         region_file = os.path.dirname(src_path)+"/hg38_annotated_collapsed_TSS_PAS_1kb.bed"
