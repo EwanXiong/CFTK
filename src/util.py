@@ -414,8 +414,10 @@ def process(args):
                 args.danpos_output_dir,
                 bam_input.split("/")[-1].rsplit(".", 1)[0],
             )
-        chrom_sizes = "../hg38.chrom.sizes"
-        region_file = "../hg38_annotated_collapsed_TSS_PAS_1kb.bed"
+        import os
+        src_path = os.path.dirname(__file__)
+        chrom_sizes = os.path.dirname(src_path)+"/hg38.chrom.sizes"
+        region_file = os.path.dirname(src_path)+"/hg38_annotated_collapsed_TSS_PAS_1kb.bed"
         command = (
             "python %s dpos %s --paired 1 -u 0 -c 1000000 -o %s && \
             ./wigToBigWig -clip %s %s %s && \
