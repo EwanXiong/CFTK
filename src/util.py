@@ -378,7 +378,7 @@ def process(args):
             os.mkdir(args.danpos_output_dir)
         disp("Output:\n")
         print(
-            "%s_CpG.bedGraph" % args.prefix,
+            "%s.occupancy.tsv" % args.prefix,
             file=sys.stderr,
         )
         if 3 in args.step:
@@ -386,6 +386,14 @@ def process(args):
                 str(args.picard_output_dir).strip() + "/%s.markup.bam" % args.prefix
             )
             danpos_wig_output = "%s/pooled/%s.markdup.Fnor.smooth.wig" % (
+                args.danpos_output_dir,
+                args.prefix,
+            )
+            danpos_bw_output = "%s/pooled/%s.bw" % (
+                args.danpos_output_dir,
+                args.prefix,
+            )
+            danpos_occupancy_output = "%s/pooled/%s.occupancy.tsv" % (
                 args.danpos_output_dir,
                 args.prefix,
             )
@@ -398,21 +406,30 @@ def process(args):
                 args.danpos_output_dir,
                 bam_input.split("/")[-1].rsplit(".", 1)[0],
             )
+            danpos_bw_output = "%s/pooled/%s.bw" % (
+                args.danpos_output_dir,
+                bam_input.split("/")[-1].rsplit(".", 1)[0],
+            )
+            danpos_occupancy_output = "%s/pooled/%s.occupancy.tsv" % (
+                args.danpos_output_dir,
+                bam_input.split("/")[-1].rsplit(".", 1)[0],
+            )
         chrom_sizes = "../hg38.chrom.sizes"
         region_file = "../hg38_annotated_collapsed_TSS_PAS_1kb.bed"
         command = (
             "python %s dpos %s --paired 1 -u 0 -c 1000000 -o %s && \
-            ./wigToBigWig -clip %s %s | \
-            ./bigWigAverageOverBed %s %s/%s.occupancy.tsv || exit 1;"
+            ./wigToBigWig -clip %s %s %s && \
+            ./bigWigAverageOverBed %s %s %s || exit 1;"
             % (
                 args.danpos_path,
                 bam_input,
                 args.danpos_output_dir,
                 danpos_wig_output,
                 chrom_sizes,
+                danpos_bw_output,
+                danpos_bw_output,
                 region_file,
-                args.danpos_path,
-                args.prefix,
+                danpos_occupancy_output,
             )
         )
         disp("Running:\n %s\n" % command)
