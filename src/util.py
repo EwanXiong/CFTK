@@ -112,6 +112,8 @@ def process(args):
         message = message + str(step) + ". %s \n" % str(steps[step])
     disp(message)
     infile = " ".join(args.infile)
+    
+    # Trimming
     if 1 in args.step:
         disp("Start: %s" % steps[1])
         output_dir = args.trimgalore_output_dir
@@ -155,6 +157,7 @@ def process(args):
             os.system(command)
         disp("Complete: %s" % steps[1])
 
+    # Alignment and sorting
     if 2 in args.step:
         disp("Start: %s" % steps[2])
         output_dir = args.bwameth_output_dir
@@ -223,7 +226,8 @@ def process(args):
         disp("Running:\n %s\n" % command)
         os.system(command)
         disp("Complete: %s" % steps[2])
-
+    
+    # Mark duplicates
     if 3 in args.step:
         disp("Start: %s" % steps[3])
         output_dir = args.picard_output_dir
@@ -283,6 +287,7 @@ def process(args):
         os.system(command)
         disp("Complete: %s" % steps[3])
 
+    # Methylation ratio calling
     if 4 in args.step:
         disp("Start: %s" % steps[4])
         output_dir = args.methyldackel_output_dir
@@ -368,6 +373,7 @@ def process(args):
         os.system(command)
         disp("Complete: %s" % steps[4])
 
+    # Nucleosome occupancy calculation
     if 5 in args.step:
         disp("Start: %s" % steps[5])
         output_dir = args.danpos_output_dir
@@ -417,8 +423,9 @@ def process(args):
         src_path = os.path.dirname(__file__)
         chrom_sizes = os.path.dirname(src_path)+"/hg38.chrom.sizes"
         region_file = os.path.dirname(src_path)+"/hg38_annotated_collapsed_TSS_PAS_1kb.bed"
-        command = (
-            "python %s dpos %s --paired 1 -u 0 -c 1000000 -o %s && \
+        if args.danpos_args:
+            command = (
+            "python %s dpos %s --paired 1 -u 0 -c 1000000 -o %s %s && \
             ./wigToBigWig -clip %s %s %s && \
             ./bigWigAverageOverBed %s %s %s || exit 1;"
             % (
@@ -431,8 +438,85 @@ def process(args):
                 danpos_bw_output,
                 region_file,
                 danpos_occupancy_output,
+                args.danpos_args,
             )
+            )
+        else:
+            command = (
+                "python %s dpos %s --paired 1 -u 0 -c 1000000 -o %s && \
+                ./wigToBigWig -clip %s %s %s && \
+                ./bigWigAverageOverBed %s %s %s || exit 1;"
+                % (
+                    args.danpos_path,
+                    bam_input,
+                    args.danpos_output_dir,
+                    danpos_wig_output,
+                    chrom_sizes,
+                    danpos_bw_output,
+                    danpos_bw_output,
+                    region_file,
+                    danpos_occupancy_output,
+                )
+            )
+        disp("Running:\n %s\n" % command)
+        os.system(command)
+        disp("Complete: %s" % steps[5])
+        
+    # Window protection score(WPS) calculation    
+    if 6 in args.step:
+        disp("Start: %s" % steps[6])
+        output_dir = args.wps_output_dir
+        if os.path.exists(args.wps_output_dir):
+            disp("Outputting to: %s" % args.wps_output_dir)
+        else:
+            disp("%s doesn't exist. Creating it for you." % args.wps_output_dir)
+            os.mkdir(args.wps_output_dir)
+        disp("Output:\n")
+        print(
+            "%s.occupancy.tsv" % args.prefix,
+            file=sys.stderr,
         )
+        if 3 in args.step:
+            bam_input = (
+                str(args.picard_output_dir).strip() + "/%s.markup.bam" % args.prefix
+            )
+            wps_output = "%s/%s.wps.txt" % (
+                args.wps_output_dir,
+                args.prefix,
+            )
+        else:
+            message = "Processing sample(s):\n"
+            print(message, file=sys.stderr)
+            print(args.infile, file=sys.stderr)
+            bam_input = args.infile[0]
+            wps_output = "%s/%s.wps.txt" % (
+                args.wps_output_dir,
+                bam_input.split("/")[-1].rsplit(".", 1)[0],
+            )
+        src_path = os.path.dirname(__file__)
+        region_file = os.path.dirname(src_path)+"/hg38_annotated_collapsed_TSS_PAS_1kb.bed"
+        if args.wps_args:
+            command = (
+                "python ./WPS_region.py -b %s -r %s -t %s -o %s %s|| exit 1;"
+                % (
+                    bam_input,
+                    region_file,
+                    args.cores,
+                    wps_output,
+                    args.wps_args
+                )
+            )
+        else:
+            command = (
+                "python ./WPS_region.py -b %s -r %s -t %s -o %s || exit 1;"
+                % (
+                    bam_input,
+                    region_file,
+                    args.cores,
+                    wps_output
+                )
+            )
+
         disp("Running:\n %s\n" % command)
         os.system(command)
         disp("Complete: %s" % steps[5])

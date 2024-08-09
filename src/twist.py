@@ -135,7 +135,7 @@ process_parser.add_argument(
     dest="picard_args",
     type=str,
     help="",
-    default="",
+    default=None,
 )
 
 process_parser.add_argument(
@@ -151,7 +151,7 @@ process_parser.add_argument(
     dest="methyldackel_args",
     type=str,
     help="",
-    default="",
+    default=None,
 )
 
 process_parser.add_argument(
@@ -168,7 +168,7 @@ process_parser.add_argument(
     dest="danpos_args",
     type=str,
     help="",
-    default="",
+    default=None,
 )
 
 process_parser.add_argument(
@@ -177,6 +177,23 @@ process_parser.add_argument(
     type=str,
     help="",
     default=os.getcwd() + "/danpos_output",
+)
+
+
+process_parser.add_argument(
+    "--wps-output-dir",
+    dest="wps_output_dir",
+    type=str,
+    help="",
+    default=os.getcwd() + "/wps_output",
+)
+
+process_parser.add_argument(
+    "--wps-args",
+    dest="wps_args",
+    type=str,
+    help="",
+    default=None,
 )
 
 merge_parser = subparsers.add_parser("merge", help="Merge")
