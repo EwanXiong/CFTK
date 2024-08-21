@@ -500,7 +500,8 @@ def process(args):
             os.path.dirname(src_path) + "/hg38_annotated_collapsed_TSS_PAS_1kb.bed"
         )
         if args.wps_args:
-            command = "python ./WPS_region.py -b %s -r %s -t %s -o %s %s|| exit 1;" % (
+            command = "python %s/WPS_region.py -b %s -r %s -t %s -o %s %s|| exit 1;" % (
+                src_path,
                 bam_input,
                 region_file,
                 args.cores,
@@ -508,7 +509,8 @@ def process(args):
                 args.wps_args,
             )
         else:
-            command = "python ./WPS_region.py -b %s -r %s -t %s -o %s || exit 1;" % (
+            command = "python %s/WPS_region.py -b %s -r %s -t %s -o %s || exit 1;" % (
+                src_path,
                 bam_input,
                 region_file,
                 args.cores,
@@ -517,7 +519,7 @@ def process(args):
 
         disp("Running:\n %s\n" % command)
         os.system(command)
-        disp("Complete: %s" % steps[5])
+        disp("Complete: %s" % steps[6])
     disp("Completing all processes.")
 
 
