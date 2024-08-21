@@ -83,10 +83,10 @@ process_parser.add_argument(
     dest="step",
     type=int,
     nargs="+",
-    help="Step of processing: [1. trimming(trim_galore), 2. alignment and sorting(bwameth and Samtools), 3.mark duplicates(Picard), 4. methylation ratio calling(MethylDackel), 5. Nucleosome occupancy(DANPOS2)]",
+    help="Step of processing: [1. trimming(trim_galore), 2. alignment and sorting(bwameth and Samtools), 3.mark duplicates(Picard), 4. methylation ratio calling(MethylDackel), 5. Nucleosome occupancy(DANPOS2), 6. window protection score calculation ]",
     default=None,
     required=True,
-    choices=range(1, 6),
+    choices=range(1, 7),
 )
 
 process_parser.add_argument(
@@ -253,25 +253,15 @@ QC_parser.add_argument(
 )
 
 QC_parser.add_argument(
-    "--clip_R1",
-    help="Timmed length from 5' end of read 1",
-    type=int,
-    default=0
+    "--clip_R1", help="Timmed length from 5' end of read 1", type=int, default=0
 )
 
 QC_parser.add_argument(
-    "--clip_R2",
-    help="Timmed length from 5' end of read 2",
-    type=int,
-    default=0
+    "--clip_R2", help="Timmed length from 5' end of read 2", type=int, default=0
 )
 
 QC_parser.add_argument(
-    "-f",
-    "--fragment",
-    help="Fragment length to check",
-    type=int,
-    default=167
+    "-f", "--fragment", help="Fragment length to check", type=int, default=167
 )
 
 
