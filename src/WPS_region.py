@@ -103,4 +103,4 @@ all_chrom_WPS = Parallel(n_jobs=core, verbose=1, backend="multiprocessing")(
 
 #pickle.dump(    np.hstack(all_chrom_WPS) * (1000000 / bamfile.count()), open(options.outfile, "wb"))
 
-np.hstack(all_chrom_WPS) * (1000000 / bamfile.count()).tofile(options.outfile, sep="\n")
+(np.hstack(all_chrom_WPS) * (1000000 / bamfile.count())).tofile(options.outfile, sep="\n")
