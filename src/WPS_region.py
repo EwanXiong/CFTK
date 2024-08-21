@@ -69,7 +69,7 @@ Read bed file for sequencing fragments
 bamfile = pysam.AlignmentFile(options.bam_path, "rb")
 regions = pd.read_csv(options.region_path, sep="\t", header=None)
 windowSize = options.windowSize // 2
-step = args.wpsstep
+step = options.wpsstep
 chrom_list = ["chr" + str(_) for _ in list(range(1, 23)) + ["X", "Y"]]
 core = options.core
 
