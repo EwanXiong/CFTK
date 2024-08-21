@@ -12,7 +12,6 @@ import pysam
 import numpy as np
 import pandas as pd
 from joblib import Parallel, delayed
-from tqdm import tqdm
 import pickle
 
 parser = OptionParser()
@@ -99,7 +98,7 @@ def WPS_chrom(chrom="chr1", step=10):
 
 
 all_chrom_WPS = Parallel(n_jobs=core, verbose=1, backend="multiprocessing")(
-    delayed(WPS_chrom)(chrom,wpsstep) for chrom in tqdm(chrom_list)
+    delayed(WPS_chrom)(chrom,step) for chrom in chrom_list
 )
 
 #pickle.dump(    np.hstack(all_chrom_WPS) * (1000000 / bamfile.count()), open(options.outfile, "wb"))
