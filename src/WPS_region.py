@@ -39,6 +39,15 @@ parser.add_option(
 )
 
 parser.add_option(
+    "-s",
+    "--step",
+    dest="windowSize",
+    help="The step width used for calculate WPS (default 10)",
+    default=10,
+    type="int",
+)
+
+parser.add_option(
     "-t",
     "--core",
     dest="core",
@@ -62,6 +71,7 @@ Read bed file for sequencing fragments
 bamfile = pysam.AlignmentFile(options.bam_path, "rb")
 regions = pd.read_csv(options.region_path, sep="\t", header=None)
 windowSize = options.windowSize // 2
+step = args.step
 chrom_list = ["chr" + str(_) for _ in list(range(1, 23)) + ["X", "Y"]]
 core = options.core
 
@@ -90,7 +100,7 @@ def WPS_chrom(chrom="chr1", step=10):
 
 
 all_chrom_WPS = Parallel(n_jobs=core, verbose=1, backend="multiprocessing")(
-    delayed(WPS_chrom)(chrom) for chrom in tqdm(chrom_list)
+    delayed(WPS_chrom)(chrom,step) for chrom in tqdm(chrom_list)
 )
 
 #pickle.dump(    np.hstack(all_chrom_WPS) * (1000000 / bamfile.count()), open(options.outfile, "wb"))
