@@ -264,6 +264,91 @@ QC_parser.add_argument(
     "-f", "--fragment", help="Fragment length to check", type=int, default=167
 )
 
+mesa_parser = subparsers.add_parser("mesa", help="MESA.")
+mesa_parser.add_argument(
+    "-o",
+    "--output-dir",
+    dest="output_dir",
+    type=str,
+    help="output directory",
+    default=os.getcwd(),
+)
+mesa_parser.add_argument(
+    "infile", type=str, help="input file", nargs="+"
+)  ## positional argument
+
+mesa_parser.add_argument(
+    "-p",
+    "--performance",
+    dest="performance",
+    action="store_true",
+    help="Test performance of modality(s)",
+)
+mesa_parser.add_argument(
+    "-m",
+    "--mesa",
+    dest="mesa",
+    action="store_true",
+    help="Run MESA on modalities, provided or best modalities tested",
+)
+
+mesa_parser.add_argument(
+    "--cv",
+    dest="cv_mesa",
+    action="store_true",
+    help="Run cross-validation for MESA",
+)
+
+
+"""
+auto modality performance test
+mesa with best performing modality & feature selection
+customized mesa
+cross-validation
+"""
+
+power_parser = subparsers.add_parser("power", help="Power analysis for biomarkers.")
+power_parser.add_argument(
+    "-o",
+    "--output-dir",
+    dest="output_dir",
+    type=str,
+    help="output directory",
+    default=os.getcwd(),
+)
+power_parser.add_argument(
+    "-s",
+    "--sample-size",
+    required=True,
+    type=int,
+    help="Sample size for power analysis",
+)
+power_parser.add_argument(
+    "-e",
+    "--effect-size",
+    required=True,
+    type=int,
+    help="Effect size for power analysis",
+)
+
+power_parser.add_argument(
+    "--step-size",
+    required=True,
+    type=int,
+    help="Step size for power analysis",
+)
+
+power_parser.add_argument(
+    "-p",
+    type=float,
+    help="dan",
+)
+
+power_parser.add_argument(
+    "--lr",
+    action="store_true",
+    help="Power analysis for logistic regression",
+)
 
 args = parser.parse_args()
 if args.mode == "init":
@@ -281,3 +366,11 @@ if args.mode == "merge":
 if args.mode == "qc":
     util.disp("QC.")
     util.qc(args)
+
+if args.mode == "mesa":
+    util.disp("MESA.")
+    util.mesa(args)
+    
+if args.mode == "power":
+    util.disp("MESA.")
+    util.power(args)

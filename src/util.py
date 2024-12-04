@@ -326,7 +326,7 @@ def process(args):
                 )
                 + "MethylDackel extract --minDepth 10 --maxVariantFrac 0.25 -@ %s --OT $(cat %s/%s_mbias_OT_OB.temp | \
                 grep -oP '(?<=--OT )[^ ]+') --OB $(cat %s/%s_mbias_OT_OB.temp | \
-                grep -oP '(?<=--OB )[^ ]+') -o %s/%s --mergeContext %s \
+                grep -oP '(?<=--OB )[^ ]+') -o %s/%s %s \
                 %s %s || exit 1;"
                 % (
                     args.cores,
@@ -355,7 +355,7 @@ def process(args):
                 )
                 + "MethylDackel extract --minDepth 10 --maxVariantFrac 0.25 -@ %s --OT $(cat %s/%s_mbias_OT_OB.temp | \
                 grep -oP '(?<=--OT )[^ ]+') --OB $(cat %s/%s_mbias_OT_OB.temp | \
-                grep -oP '(?<=--OB )[^ ]+') -o %s/%s --mergeContext \
+                grep -oP '(?<=--OB )[^ ]+') -o %s/%s \
                 %s %s || exit 1;"
                 % (
                     args.cores,
@@ -702,6 +702,10 @@ def qc(args):
                 )
 
     disp("QC completed.")
+
+
+def mesa(args):
+    return
 
 
 """
