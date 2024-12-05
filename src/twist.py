@@ -291,17 +291,14 @@ mesa_parser.add_argument(
     action="store_true",
     help="Run MESA on modalities, provided or best modalities tested",
 )
-
 mesa_parser.add_argument(
     "--cv",
     dest="cv_mesa",
     action="store_true",
     help="Run cross-validation for MESA",
 )
-
-
 """
-auto modality performance test
+modality performance
 mesa with best performing modality & feature selection
 customized mesa
 cross-validation
@@ -330,10 +327,9 @@ power_parser.add_argument(
     type=int,
     help="Effect size for power analysis",
 )
-
 power_parser.add_argument(
     "--step-size",
-    required=True,
+    default=1,
     type=int,
     help="Step size for power analysis",
 )
@@ -341,14 +337,22 @@ power_parser.add_argument(
 power_parser.add_argument(
     "-p",
     type=float,
-    help="dan",
+    help="Custom p-value threshold for power analysis",
 )
 
 power_parser.add_argument(
     "--lr",
-    action="store_true",
-    help="Power analysis for logistic regression",
+    type="store_true",
+    help="power analysis for EWAS (linear regression)",
 )
+
+power_parser.add_argument(
+    "--cpg-std",
+    type=str,
+    default=os.getcwd()+'/twist_497sample_cpg_std.pkl'
+    help="power analysis for EWAS (linear regression)",
+)
+
 
 args = parser.parse_args()
 if args.mode == "init":
@@ -370,7 +374,7 @@ if args.mode == "qc":
 if args.mode == "mesa":
     util.disp("MESA.")
     util.mesa(args)
-    
+
 if args.mode == "power":
-    util.disp("MESA.")
-    util.power(args)
+    util.disp("Power analysis.")
+    util.mesa(args)
