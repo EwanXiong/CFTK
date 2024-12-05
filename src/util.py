@@ -4,6 +4,7 @@ import time, sys, os, json, argparse, subprocess, re, glob, os
 import seaborn as sns
 import matplotlib.pyplot as plt
 import shlex, subprocess
+from power_analysis import *
 
 steps = {
     1: "trimming(trim_galore)",
@@ -705,6 +706,20 @@ def qc(args):
 
 
 def mesa(args):
+    return
+
+
+def power(args):
+    cpg_std = pd.read_pickle(args.cpg_std)
+    disp("Power analysis.")
+    alpha = 2.7050713203440227e-08
+    if args.lr:
+        alpha = 2.221510618472339e-20
+    if args.p:
+        alpha = args.p
+    es_all = power_analysis(args.sample_size, args.effect_size, args.step_size, alpha)
+    power_analyis_output(es_all, args.output_dir)
+    disp(f"Power analysis completed. Results saved in {args.output_dir}.")
     return
 
 
