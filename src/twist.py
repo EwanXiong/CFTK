@@ -297,6 +297,15 @@ mesa_parser.add_argument(
     action="store_true",
     help="Run cross-validation for MESA",
 )
+
+mesa_parser.add_argument(
+    "--max-modality",
+    dest="max_modality",
+    type=int,
+    help="When constructing MESA based perMaximum number of modalities to used based on performance",
+)
+
+
 """
 modality performance
 mesa with best performing modality & feature selection
@@ -342,15 +351,22 @@ power_parser.add_argument(
 
 power_parser.add_argument(
     "--lr",
-    type="store_true",
+    action="store_true",
     help="power analysis for EWAS (linear regression)",
 )
 
 power_parser.add_argument(
     "--cpg-std",
     type=str,
-    default=os.getcwd()+'/twist_497sample_cpg_std.pkl'
+    default=os.getcwd()+'/twist_497sample_cpg_std.pkl',
     help="power analysis for EWAS (linear regression)",
+)
+
+power_parser.add_argument(
+    "-@",
+    "--cores",
+    type=int,
+    default=-1
 )
 
 

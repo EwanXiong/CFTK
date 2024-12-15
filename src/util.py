@@ -4,6 +4,12 @@ import time, sys, os, json, argparse, subprocess, re, glob, os
 import seaborn as sns
 import matplotlib.pyplot as plt
 import shlex, subprocess
+from modality_performance import *
+from xgboost import XGBClassifier
+
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.linear_model import LogisticRegression
+from sklearn.svm import SVC
 from power_analysis import *
 
 steps = {
@@ -704,21 +710,107 @@ def qc(args):
 
     disp("QC completed.")
 
+classifier_dist = {
+    1: RandomForestClassifier(random_state=0, n_jobs=-1),
+    2: LogisticRegression(random_state=0, n_jobs=-1),
+    3: SVC(random_state=0, n_jobs=-1),
+    4: XGBClassifier(random_state=0, n_jobs=-1),
+}
 
 def mesa(args):
+    if args.peformance:
+        performance = mesa_performance(args)
+        pd.set_option("display.max_columns", None)  # Show all columns
+        pd.set_option("display.expand_frame_repr", False)  # Prevent line breaking
+        pd.set_option("display.colheader_justify", "center")  # Center the headers
+        print(performance, file=sys.stderr)
+    if args.mesa:
+        if args.performance:
+            selected_modality = performance.head(args.max_modality)
+            selected_modality_name = selected_modality.index.values
+            modality_matrix = [
+                pd.read_csv(
+                    args.modality_matrix[np.where(args.modality == _)[0]], sep="\t"
+                )
+                for _ in selected_modality_name
+            ]
+            modality_clf = [
+                classifier_dist[_[1]]
+                for _ in selected_modality["best_classifier, idx"].values
+            ]
+        else:
+            modality_matrix = [pd.read_csv(_, sep="\t") for _ in args.modality_matrix]
+            modality_clf = [classifier_dist[_] for _ in args.clf]
+        modalities = [
+                MESA_modality(classifier=clf, top_n=100).fit(
+                    SimpleImputer().fit_transform(X), y
+                )
+                for X, clf in zip(modality_matrix, modality_clf)
+            ]
+        mesa_model = MESA(modalities,[SimpleImputer().fit_transform(X) for _ in modality_matrix])
+        
+        # save trained MESA model
+    if args.cv_mesa:
+        modality_matrix = [pd.read_csv(_, sep="\t") for _ in args.modality_matrix]
+        modality_clf = [classifier_dist[_] for _ in args.clf]
+        
     return
 
 
+
+
+
+def mesa_performance(args):
+    modality_name = args.modality
+    modality_matrix = [pd.read_csv(_, sep="\t") for _ in args.modality_matrix]
+    if len(modality_name) != len(modality_matrix):
+        disp("Number of modalities and matrices are not equal.")
+        return 1
+
+    label = pd.read_table(args.label, header=None).values.reshape(-1)
+
+    classifiers = [classifier_dist[_] for _ in args.clf]
+    performance = modality_performance(
+        modality_name,
+        modality_matrix,
+        label,
+        classifiers,
+        feature_size=args.feature_size,
+        subset=args.subet,
+        repeat=args.repeat,
+    )
+    return performance
+
+
 def power(args):
-    cpg_std = pd.read_pickle(args.cpg_std)
     disp("Power analysis.")
     alpha = 2.7050713203440227e-08
     if args.lr:
         alpha = 2.221510618472339e-20
     if args.p:
         alpha = args.p
-    es_all = power_analysis(args.sample_size, args.effect_size, args.step_size, alpha)
-    power_analyis_output(es_all, args.output_dir)
+
+    src_path = os.path.dirname(__file__)
+    cpg_std_path = os.path.dirname(src_path) + "/twist_497sample_cpg_std.pkl"
+    alpha = 2.7050713203440227e-08
+    if args.lr:
+        alpha = 2.221510618472339e-20
+    if args.p:
+        alpha = args.p
+    command = (
+        "python %s/power_analysis.py -s %s -e %s -o %s --cpg-std %s -p %s -@ %s --step-size %s|| exit 1;"
+        % (
+            src_path,
+            args.sample_size,
+            args.effect_size,
+            args.output_dir,
+            cpg_std_path,
+            alpha,
+            args.cores,
+            args.step_size,
+        )
+    )
+    os.system(command)
     disp(f"Power analysis completed. Results saved in {args.output_dir}.")
     return
 
