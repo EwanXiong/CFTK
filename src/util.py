@@ -713,7 +713,7 @@ def qc(args):
 classifier_dist = {
     1: RandomForestClassifier(random_state=0, n_jobs=-1),
     2: LogisticRegression(random_state=0, n_jobs=-1),
-    3: SVC(random_state=0, n_jobs=-1),
+    3: SVC(random_state=0),
     4: XGBClassifier(random_state=0, n_jobs=-1),
 }
 
