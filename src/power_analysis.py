@@ -16,7 +16,7 @@ parser.add_argument(
     "-e", "--effect-size", dest="effect_size", type=int, help="Effect size"
 )
 parser.add_argument(
-    "-o", "--output-dir", dest="output_dir", type=int, help="output_directory"
+    "-o", "--output-dir", dest="output_dir", help="output_directory"
 )
 parser.add_argument("--step-size", dest="step_size", type=int, help="Alpha", default=1)
 parser.add_argument(
