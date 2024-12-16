@@ -10,7 +10,7 @@ from xgboost import XGBClassifier
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.linear_model import LogisticRegression
 from sklearn.svm import SVC
-from power_analysis import *
+#from power_analysis import *
 
 steps = {
     1: "trimming(trim_galore)",
