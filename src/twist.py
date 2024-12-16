@@ -318,7 +318,6 @@ power_parser.add_argument(
     "-o",
     "--output-dir",
     dest="output_dir",
-    type=str,
     help="output directory",
     default=os.getcwd(),
 )
@@ -358,7 +357,7 @@ power_parser.add_argument(
 power_parser.add_argument(
     "--cpg-std",
     type=str,
-    default=os.getcwd()+'/twist_497sample_cpg_std.pkl',
+    default=os.path.dirname(os.path.dirname(__file__))+'/twist_497sample_cpg_std.pkl',
     help="power analysis for EWAS (linear regression)",
 )
 
