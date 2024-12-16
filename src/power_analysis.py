@@ -13,7 +13,7 @@ parser.add_argument(
     "-s", "--sample-size", dest="sample_size", type=int, help="Sample size"
 )
 parser.add_argument(
-    "-e", "--effect-size", dest="effect_size", type=int, help="Effect size"
+    "-e", "--effect-size", dest="effect_size", type=float, help="Effect size"
 )
 parser.add_argument(
     "-o", "--output-dir", dest="output_dir", help="output_directory"
