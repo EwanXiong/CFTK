@@ -391,4 +391,4 @@ if args.mode == "mesa":
 
 if args.mode == "power":
     util.disp("Power analysis.")
-    util.mesa(args)
+    util.power(args)
