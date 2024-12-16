@@ -332,7 +332,6 @@ power_parser.add_argument(
     "-e",
     "--effect-size",
     required=True,
-    type=int,
     help="Effect size for power analysis",
 )
 power_parser.add_argument(
