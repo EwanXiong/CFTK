@@ -10,7 +10,8 @@ from xgboost import XGBClassifier
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.linear_model import LogisticRegression
 from sklearn.svm import SVC
-#from power_analysis import *
+
+# from power_analysis import *
 
 steps = {
     1: "trimming(trim_galore)",
@@ -710,12 +711,14 @@ def qc(args):
 
     disp("QC completed.")
 
+
 classifier_dist = {
     1: RandomForestClassifier(random_state=0, n_jobs=-1),
     2: LogisticRegression(random_state=0, n_jobs=-1),
     3: SVC(random_state=0),
     4: XGBClassifier(random_state=0, n_jobs=-1),
 }
+
 
 def mesa(args):
     if args.peformance:
@@ -742,22 +745,21 @@ def mesa(args):
             modality_matrix = [pd.read_csv(_, sep="\t") for _ in args.modality_matrix]
             modality_clf = [classifier_dist[_] for _ in args.clf]
         modalities = [
-                MESA_modality(classifier=clf, top_n=100).fit(
-                    SimpleImputer().fit_transform(X), y
-                )
-                for X, clf in zip(modality_matrix, modality_clf)
-            ]
-        mesa_model = MESA(modalities,[SimpleImputer().fit_transform(X) for _ in modality_matrix])
-        
+            MESA_modality(classifier=clf, top_n=100).fit(
+                SimpleImputer().fit_transform(X), y
+            )
+            for X, clf in zip(modality_matrix, modality_clf)
+        ]
+        mesa_model = MESA(
+            modalities, [SimpleImputer().fit_transform(X) for _ in modality_matrix]
+        )
+
         # save trained MESA model
     if args.cv_mesa:
         modality_matrix = [pd.read_csv(_, sep="\t") for _ in args.modality_matrix]
         modality_clf = [classifier_dist[_] for _ in args.clf]
-        
+
     return
-
-
-
 
 
 def mesa_performance(args):
@@ -783,7 +785,7 @@ def mesa_performance(args):
 
 
 def power(args):
-    disp("Power analysis.")
+    # disp("Power analysis.")
     alpha = 2.7050713203440227e-08
     if args.lr:
         alpha = 2.221510618472339e-20
@@ -797,6 +799,10 @@ def power(args):
         alpha = 2.221510618472339e-20
     if args.p:
         alpha = args.p
+    disp("Output result to %s" % args.output_dir)
+    if not (os.path.exists(args.output_dir) and os.path.isdir(args.output_dir)):
+        print("Directory does not exist! Creating it for you.")
+        os.mkdir(args.output_dir)
     command = (
         "python %s/power_analysis.py -s %s -e %s -o %s --cpg-std %s -p %s -@ %s --step-size %s|| exit 1;"
         % (
