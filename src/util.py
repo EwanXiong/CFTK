@@ -731,9 +731,11 @@ def mesa_performance(args):
         disp("Number of modalities and matrices are not equal.")
         return 1
 
-    label = pd.read_table(args.label, header=None,index_col=0).values.reshape(-1)
-
-    classifiers = [classifier_dist[_] for _ in args.clf]
+    label = pd.read_table(args.label, header=None, index_col=0).values.reshape(-1)
+    if len(args.clf) == len(modality_name):
+        classifiers = [classifier_dist[_] for _ in args.clf]
+    else:
+        classifiers = classifier_dist[args.clf[0]] * len(modality_name)
     performance = modality_performance(
         modality_name,
         modality_matrix,
