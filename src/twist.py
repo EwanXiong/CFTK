@@ -315,18 +315,23 @@ def all_or_positive_float(value):
     try:
         float_value = float(value)
         if float_value > 0:
-            if num % 1 == 0:
+            if float_value % 1 == 0:
                 return int(float_value)
             else:
                 return float_value
         else:
-            raise argparse.ArgumentTypeError(f"Value must be 'all' or a positive number, got {value}.")
+            raise argparse.ArgumentTypeError(
+                f"Value must be 'all' or a positive number, got {value}."
+            )
     except ValueError:
-        raise argparse.ArgumentTypeError(f"Value must be 'all' or a positive number, got {value}.")
+        raise argparse.ArgumentTypeError(
+            f"Value must be 'all' or a positive number, got {value}."
+        )
 
 
-
-mesa_parser.add_argument("--subset", dest="subset", help="", type=all_or_positive_float, default=0.1)
+mesa_parser.add_argument(
+    "--subset", dest="subset", help="", type=all_or_positive_float, default=0.1
+)
 
 mesa_parser.add_argument("--repeat", dest="repeat", help="", type=int, default=3)
 
