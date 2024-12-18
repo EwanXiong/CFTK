@@ -278,12 +278,42 @@ mesa_parser.add_argument(
 )  ## positional argument
 
 mesa_parser.add_argument(
+    "--modality",
+    dest="modality",
+    nargs="+",
+    help="Modality name(s)",
+)
+
+mesa_parser.add_argument(
+    "--label",
+    dest="label",
+    help="Label for phenotpyes/status",
+)
+
+mesa_parser.add_argument(
+    "--clf",
+    dest="clf",
+    type=int,
+    nargs="*",
+    choices=range(1, 5),
+    help="Classifier to test: 1. Random Forest, 2.Logistic Regression , 3. SVM, 4. XGBoost",
+    default=[1],
+)
+
+mesa_parser.add_argument(
     "-p",
     "--performance",
     dest="performance",
     action="store_true",
     help="Test performance of modality(s)",
 )
+
+mesa_parser.add_argument("--subset", dest="subset", help="", default=0.1)
+
+mesa_parser.add_argument("--repeat", dest="repeat", help="", type=int, default=3)
+
+mesa_parser.add_argument("--size", dest="size", help="", type=int, default=100)
+
 mesa_parser.add_argument(
     "-m",
     "--mesa",
@@ -356,16 +386,11 @@ power_parser.add_argument(
 power_parser.add_argument(
     "--cpg-std",
     type=str,
-    default=os.path.dirname(os.path.dirname(__file__))+'/twist_497sample_cpg_std.pkl',
+    default=os.path.dirname(os.path.dirname(__file__)) + "/twist_497sample_cpg_std.pkl",
     help="power analysis for EWAS (linear regression)",
 )
 
-power_parser.add_argument(
-    "-@",
-    "--cores",
-    type=int,
-    default=-1
-)
+power_parser.add_argument("-@", "--cores", type=int, default=-1)
 
 
 args = parser.parse_args()

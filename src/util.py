@@ -11,6 +11,10 @@ from sklearn.ensemble import RandomForestClassifier
 from sklearn.linear_model import LogisticRegression
 from sklearn.svm import SVC
 
+
+pd.set_option("display.max_columns", None)  # Show all columns
+pd.set_option("display.expand_frame_repr", False)  # Prevent line breaking
+pd.set_option("display.colheader_justify", "center")  # Center the headers
 # from power_analysis import *
 
 steps = {
@@ -720,12 +724,31 @@ classifier_dist = {
 }
 
 
+def mesa_performance(args):
+    modality_name = args.modality
+    modality_matrix = [pd.read_csv(_, sep="\t") for _ in args.infile]
+    if len(modality_name) != len(modality_matrix):
+        disp("Number of modalities and matrices are not equal.")
+        return 1
+
+    label = pd.read_table(args.label, header=None).values.reshape(-1)
+
+    classifiers = [classifier_dist[_] for _ in args.clf]
+    performance = modality_performance(
+        modality_name,
+        modality_matrix,
+        label,
+        classifiers,
+        feature_size=args.size,
+        subset=args.subset,
+        repeat=args.repeat,
+    )
+    return performance
+
+
 def mesa(args):
     if args.peformance:
         performance = mesa_performance(args)
-        pd.set_option("display.max_columns", None)  # Show all columns
-        pd.set_option("display.expand_frame_repr", False)  # Prevent line breaking
-        pd.set_option("display.colheader_justify", "center")  # Center the headers
         print(performance, file=sys.stderr)
     if args.mesa:
         if args.performance:
@@ -742,8 +765,9 @@ def mesa(args):
                 for _ in selected_modality["best_classifier, idx"].values
             ]
         else:
-            modality_matrix = [pd.read_csv(_, sep="\t") for _ in args.modality_matrix]
+            modality_matrix = [pd.read_csv(_, sep="\t") for _ in args.infile]
             modality_clf = [classifier_dist[_] for _ in args.clf]
+
         modalities = [
             MESA_modality(classifier=clf, top_n=100).fit(
                 SimpleImputer().fit_transform(X), y
@@ -756,32 +780,10 @@ def mesa(args):
 
         # save trained MESA model
     if args.cv_mesa:
-        modality_matrix = [pd.read_csv(_, sep="\t") for _ in args.modality_matrix]
+        modality_matrix = [pd.read_csv(_, sep="\t") for _ in args.infile]
         modality_clf = [classifier_dist[_] for _ in args.clf]
 
     return
-
-
-def mesa_performance(args):
-    modality_name = args.modality
-    modality_matrix = [pd.read_csv(_, sep="\t") for _ in args.modality_matrix]
-    if len(modality_name) != len(modality_matrix):
-        disp("Number of modalities and matrices are not equal.")
-        return 1
-
-    label = pd.read_table(args.label, header=None).values.reshape(-1)
-
-    classifiers = [classifier_dist[_] for _ in args.clf]
-    performance = modality_performance(
-        modality_name,
-        modality_matrix,
-        label,
-        classifiers,
-        feature_size=args.feature_size,
-        subset=args.subet,
-        repeat=args.repeat,
-    )
-    return performance
 
 
 def power(args):
@@ -801,7 +803,7 @@ def power(args):
         alpha = args.p
     disp("Output result to %s" % args.output_dir)
     if not (os.path.exists(args.output_dir) and os.path.isdir(args.output_dir)):
-        print("Directory does not exist! Creating it for you.")
+        disp("Directory does not exist! Creating it for you.")
         os.mkdir(args.output_dir)
     command = (
         "python %s/power_analysis.py -s %s -e %s -o %s --cpg-std %s -p %s -@ %s --step-size %s|| exit 1;"
