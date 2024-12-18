@@ -732,10 +732,11 @@ def mesa_performance(args):
         return 1
 
     label = pd.read_table(args.label, header=None, index_col=0).values.reshape(-1)
-    if len(args.clf) == len(modality_name):
-        classifiers = [classifier_dist[_] for _ in args.clf]
-    else:
-        classifiers = classifier_dist[args.clf[0]] * len(modality_name)
+    # if len(args.clf) == len(modality_name):
+    #     classifiers = [classifier_dist[_] for _ in args.clf]
+    # else:
+    #     classifiers = classifier_dist[args.clf[0]] * len(modality_name)
+    classifiers = [classifier_dist[_] for _ in args.clf]
     performance = modality_performance(
         modality_name,
         modality_matrix,
@@ -751,8 +752,8 @@ def mesa_performance(args):
 def mesa(args):
     if args.performance:
         performance = mesa_performance(args)
-        #print(performance[0], file=sys.stderr)
-        disp(performance[0])
+        # print(performance[0], file=sys.stderr)
+        disp("\n%s" % performance[0])
     if args.mesa:
         if args.performance:
             selected_modality = performance.head(args.max_modality)
@@ -773,8 +774,11 @@ def mesa(args):
             modality_matrix = [
                 pd.read_csv(_, sep="\t", index_col=0).T for _ in args.infile
             ]
-            modality_clf = [classifier_dist[_] for _ in args.clf]
-
+            # modality_clf = [classifier_dist[_] for _ in args.clf]
+            if len(args.clf) == len(modality_matrix):
+                modality_clf = [classifier_dist[_] for _ in args.clf]
+            else:
+                modality_clf = classifier_dist[args.clf[0]] * len(modality_matrix)
         modalities = [
             MESA_modality(classifier=clf, top_n=100).fit(
                 SimpleImputer().fit_transform(X), y
