@@ -726,7 +726,7 @@ classifier_dist = {
 
 def mesa_performance(args):
     modality_name = args.modality
-    modality_matrix = [pd.read_csv(_, sep="\t") for _ in args.infile]
+    modality_matrix = [pd.read_csv(_, sep="\t",index_col=0).T for _ in args.infile]
     if len(modality_name) != len(modality_matrix):
         disp("Number of modalities and matrices are not equal.")
         return 1
@@ -758,8 +758,8 @@ def mesa(args):
             selected_modality_name = selected_modality.index.values
             modality_matrix = [
                 pd.read_csv(
-                    args.modality_matrix[np.where(args.modality == _)[0]], sep="\t"
-                )
+                    args.modality_matrix[np.where(args.modality == _)[0]], sep="\t",index_col=0
+                ).T
                 for _ in selected_modality_name
             ]
             modality_clf = [
@@ -767,7 +767,7 @@ def mesa(args):
                 for _ in selected_modality["best_classifier, idx"].values
             ]
         else:
-            modality_matrix = [pd.read_csv(_, sep="\t") for _ in args.infile]
+            modality_matrix = [pd.read_csv(_, sep="\t",index_col=0).T for _ in args.infile]
             modality_clf = [classifier_dist[_] for _ in args.clf]
 
         modalities = [
@@ -782,7 +782,7 @@ def mesa(args):
 
         # save trained MESA model
     if args.cv_mesa:
-        modality_matrix = [pd.read_csv(_, sep="\t") for _ in args.infile]
+        modality_matrix = [pd.read_csv(_, sep="\t",index_col=0).T for _ in args.infile]
         modality_clf = [classifier_dist[_] for _ in args.clf]
 
     return
