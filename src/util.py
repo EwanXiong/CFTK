@@ -749,7 +749,7 @@ def mesa_performance(args):
 
 
 def mesa(args):
-    if args.peformance:
+    if args.performance:
         performance = mesa_performance(args)
         print(performance, file=sys.stderr)
     if args.mesa:
