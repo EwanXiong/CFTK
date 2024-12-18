@@ -10,7 +10,7 @@ from xgboost import XGBClassifier
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.linear_model import LogisticRegression
 from sklearn.svm import SVC
-from MESA import *
+from MESA.MESA import *
 
 pd.set_option("display.max_columns", None)  # Show all columns
 pd.set_option("display.expand_frame_repr", False)  # Prevent line breaking
