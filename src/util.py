@@ -16,6 +16,7 @@ pd.set_option("display.max_columns", None)  # Show all columns
 pd.set_option("display.expand_frame_repr", False)  # Prevent line breaking
 pd.set_option("display.colheader_justify", "center")  # Center the headers
 # from power_analysis import *
+np.int = int
 
 steps = {
     1: "trimming(trim_galore)",
