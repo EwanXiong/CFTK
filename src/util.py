@@ -10,7 +10,7 @@ from xgboost import XGBClassifier
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.linear_model import LogisticRegression
 from sklearn.svm import SVC
-
+from MESA import *
 
 pd.set_option("display.max_columns", None)  # Show all columns
 pd.set_option("display.expand_frame_repr", False)  # Prevent line breaking
@@ -754,7 +754,7 @@ def mesa(args):
     if args.performance:
         performance = mesa_performance(args)
         # print(performance[0], file=sys.stderr)
-        disp("\n%s" % performance[0])
+        disp("Modality performance summary\n%s\n" % performance[0])
     if args.mesa:
         if args.performance:
             selected_modality = performance.head(args.max_modality)
@@ -780,21 +780,26 @@ def mesa(args):
                 modality_clf = [classifier_dist[_] for _ in args.clf]
             else:
                 modality_clf = classifier_dist[args.clf[0]] * len(modality_matrix)
+        y = pd.read_table(args.label, header=None, index_col=0).values.reshape(-1)
         modalities = [
-            MESA_modality(classifier=clf, top_n=100).fit(
-                SimpleImputer().fit_transform(X), y
-            )
+            MESA_modality(classifier=clf, top_n=100).fit(X, y)
             for X, clf in zip(modality_matrix, modality_clf)
         ]
         mesa_model = MESA(
-            modalities, [SimpleImputer().fit_transform(X) for _ in modality_matrix]
-        )
-
+            meta_estimator=LogisticRegression(random_state=0, n_jobs=-1)
+        ).fit(modalities, modality_matrix, y)
         # save trained MESA model
     if args.cv_mesa:
         modality_matrix = [pd.read_csv(_, sep="\t", index_col=0).T for _ in args.infile]
         modality_clf = [classifier_dist[_] for _ in args.clf]
-
+        y = pd.read_table(args.label, header=None, index_col=0).values.reshape(-1)
+        mesa_cv = MESA_CV(
+            selector=GenericUnivariateSelect(
+                score_func=wilcoxon, mode="k_best", param=args.size
+            ),
+            meta_estimator=LogisticRegression(random_state=0, n_jobs=-1),
+        ).fit(modality_matrix, y)
+        disp(mesa_cv.get_performance())
     return
 
 
