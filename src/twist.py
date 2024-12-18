@@ -308,7 +308,22 @@ mesa_parser.add_argument(
     help="Test performance of modality(s)",
 )
 
-mesa_parser.add_argument("--subset", dest="subset", help="", default=0.1)
+
+def all_or_positive_float(value):
+    if value == "all":
+        return value
+    try:
+        float_value = float(value)
+        if float_value > 0:
+            return float_value
+        else:
+            raise argparse.ArgumentTypeError(f"Value must be 'all' or a positive number, got {value}.")
+    except ValueError:
+        raise argparse.ArgumentTypeError(f"Value must be 'all' or a positive number, got {value}.")
+
+
+
+mesa_parser.add_argument("--subset", dest="subset", help="", type=all_or_positive_float, default=0.1)
 
 mesa_parser.add_argument("--repeat", dest="repeat", help="", type=int, default=3)
 

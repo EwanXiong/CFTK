@@ -22,7 +22,7 @@ def feature_sampler(subset, matrix):
     elif isinstance(subset, float):
         return matrix.iloc[
             :,
-            np.random.choice(matrix.shape[1], matrix.shape[1] * subset, replace=False),
+            np.random.choice(matrix.shape[1], int(matrix.shape[1] * subset), replace=False),
         ]
     elif isinstance(subset, str):
         return matrix.iloc[:, matrix.columns.str.startswith(subset)]
