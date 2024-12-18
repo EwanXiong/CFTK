@@ -751,7 +751,8 @@ def mesa_performance(args):
 def mesa(args):
     if args.performance:
         performance = mesa_performance(args)
-        print(performance, file=sys.stderr)
+        #print(performance[0], file=sys.stderr)
+        disp(performance[0])
     if args.mesa:
         if args.performance:
             selected_modality = performance.head(args.max_modality)
