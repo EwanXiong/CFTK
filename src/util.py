@@ -745,6 +745,7 @@ def mesa_performance(args):
         feature_size=args.size,
         subset=args.subset,
         repeat=args.repeat,
+        n_jobs=args.cores,
     )
     return performance
 

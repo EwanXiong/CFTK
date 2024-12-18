@@ -358,6 +358,7 @@ mesa_parser.add_argument(
     help="When constructing MESA based perMaximum number of modalities to used based on performance",
 )
 
+mesa_parser.add_argument("-@", "--cores", type=int, default=-1)
 
 """
 modality performance

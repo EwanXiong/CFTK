@@ -88,6 +88,7 @@ def modality_performance(
     subset="all",
     repeat=5,
     verbose=0,
+    n_jobs=-1
 ):
     """
     Main function for automatic modality performance test.
@@ -140,7 +141,7 @@ def modality_performance(
                     X,
                     y,
                     cv=cv,
-                    n_jobs=-1,
+                    n_jobs=n_jobs,
                     scoring=scoring,
                     verbose=verbose,
                 )
