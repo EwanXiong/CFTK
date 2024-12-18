@@ -315,7 +315,10 @@ def all_or_positive_float(value):
     try:
         float_value = float(value)
         if float_value > 0:
-            return float_value
+            if num % 1 == 0:
+                return int(float_value)
+            else:
+                return float_value
         else:
             raise argparse.ArgumentTypeError(f"Value must be 'all' or a positive number, got {value}.")
     except ValueError:
