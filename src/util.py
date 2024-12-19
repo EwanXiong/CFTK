@@ -1,3 +1,4 @@
+import pickle
 import pandas as pd
 import numpy as np
 import time, sys, os, json, argparse, subprocess, re, glob, os
@@ -756,10 +757,16 @@ def mesa(args):
         performance = mesa_performance(args)
         # print(performance[0], file=sys.stderr)
         disp("Modality performance summary\n%s\n" % performance[0])
+        performance[0].to_csv(args.output_dir + "/modality_performance.tsv", sep="\t")
     if args.mesa:
+        disp("Constructing MESA model.")
         if args.performance:
             selected_modality = performance.head(args.max_modality)
             selected_modality_name = selected_modality.index.values
+            disp(
+                "Modality performance test is done earlier. Using the top %s modalities: %s"
+                % (args.max_modality, selected_modality_name)
+            )
             modality_matrix = [
                 pd.read_csv(
                     args.modality_matrix[np.where(args.modality == _)[0]],
@@ -773,34 +780,60 @@ def mesa(args):
                 for _ in selected_modality["best_classifier, idx"].values
             ]
         else:
+            disp(
+                "Modality performance test skipped. Loading modality(s) matrix from input: %s"
+                % args.infile
+            )
             modality_matrix = [
                 pd.read_csv(_, sep="\t", index_col=0).T for _ in args.infile
             ]
             # modality_clf = [classifier_dist[_] for _ in args.clf]
             if len(args.clf) == len(modality_matrix):
+                disp("Classifier for each modality is specified.")
                 modality_clf = [classifier_dist[_] for _ in args.clf]
+                disp(modality_clf)
+            elif len(args.clf) > 0:
+                disp(
+                    "Number of classifier > or < number of modality(s). Use first classifer for all modality(s)."
+                )
+                disp(classifier_dist[args.clf[0]])
+                modality_clf = [classifier_dist[args.clf[0]]] * len(modality_matrix)
             else:
-                modality_clf = classifier_dist[args.clf[0]] * len(modality_matrix)
+                disp(
+                    "Classifier for each modality is not specified properly. Use default classifier for all modality(s)."
+                )
+                modality_clf = [classifier_dist[1]] * len(modality_matrix)
+                disp(modality_clf)
+        disp("Loading label from input: %s" % args.label)
         y = pd.read_table(args.label, header=None, index_col=0).values.reshape(-1)
+        disp("Fitting base estimators.")
         modalities = [
             MESA_modality(classifier=clf, top_n=100).fit(X, y)
             for X, clf in zip(modality_matrix, modality_clf)
         ]
+        disp("Constructing MESA model.")
         mesa_model = MESA(
             meta_estimator=LogisticRegression(random_state=0, n_jobs=-1)
         ).fit(modalities, modality_matrix, y)
+        pickle.dump(mesa_model, open(args.output_dir + "/MESA_model.pkl", "wb"))
+        disp("MESA model saved to %s" % args.output_dir + "/MESA_model.pkl")
         # save trained MESA model
     if args.cv_mesa:
         modality_matrix = [pd.read_csv(_, sep="\t", index_col=0).T for _ in args.infile]
         modality_clf = [classifier_dist[_] for _ in args.clf]
         y = pd.read_table(args.label, header=None, index_col=0).values.reshape(-1)
+        if len(modality_matrix) == 1:
+            disp("MESA cross-validation for one modality.")
+            modality_matrix = modality_matrix[0]
+        else:
+            disp("MESA cross-validation for multiple modalities.")
         mesa_cv = MESA_CV(
             selector=GenericUnivariateSelect(
                 score_func=wilcoxon, mode="k_best", param=args.size
             ),
             meta_estimator=LogisticRegression(random_state=0, n_jobs=-1),
         ).fit(modality_matrix, y)
-        disp(mesa_cv.get_performance())
+        disp("MESA cross-validation AUC: %s" % mesa_cv.get_performance())
     return
 
 
