@@ -819,8 +819,27 @@ def mesa(args):
         disp("MESA model saved to %s" % args.output_dir + "/MESA_model.pkl")
         # save trained MESA model
     if args.cv_mesa:
+        disp("Loading modality(s) matrix from input: %s" % args.infile)
         modality_matrix = [pd.read_csv(_, sep="\t", index_col=0).T for _ in args.infile]
-        modality_clf = [classifier_dist[_] for _ in args.clf]
+
+        if len(args.clf) == len(modality_matrix):
+            disp("Classifier for each modality is specified.")
+            modality_clf = [classifier_dist[_] for _ in args.clf]
+            disp(modality_clf)
+        elif len(args.clf) > 0:
+            disp(
+                "Number of classifier > or < number of modality(s). Use first classifer for all modality(s)."
+            )
+            disp(classifier_dist[args.clf[0]])
+            modality_clf = [classifier_dist[args.clf[0]]] * len(modality_matrix)
+        else:
+            disp(
+                "Classifier for each modality is not specified properly. Use default classifier for all modality(s)."
+            )
+            modality_clf = [classifier_dist[1]] * len(modality_matrix)
+            disp(modality_clf)
+
+        disp("Loading label from input: %s" % args.label)
         y = pd.read_table(args.label, header=None, index_col=0).values.reshape(-1)
         if len(modality_matrix) == 1:
             disp("MESA cross-validation for one modality.")
