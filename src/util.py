@@ -509,10 +509,11 @@ def process(args):
                 args.wps_output_dir,
                 bam_input.split("/")[-1].rsplit(".", 1)[0],
             )
-        src_path = os.path.dirname(__file__)
-        region_file = (
-            os.path.dirname(src_path) + "/hg38_annotated_collapsed_TSS_PAS_1kb.bed"
-        )
+        # src_path = os.path.dirname(__file__)
+        # region_file = (
+        #     os.path.dirname(src_path) + "/hg38_annotated_collapsed_TSS_PAS_1kb.bed"
+        # )
+        region_file = args.region
         if args.wps_args:
             command = "python %s/WPS_region.py -b %s -r %s -t %s -o %s %s|| exit 1;" % (
                 src_path,

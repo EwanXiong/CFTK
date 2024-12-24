@@ -196,6 +196,16 @@ process_parser.add_argument(
     default=None,
 )
 
+process_parser.add_argument(
+    "-r",
+    "--region",
+    dest="region",
+    type=str,
+    help="The bed file for regions to calculate occupany/fuzziness/WPS",
+    default=os.path.dirname(os.path.dirname(__file__))
+    + "/hg38_annotated_collapsed_TSS_PAS_1kb.bed",
+)
+
 merge_parser = subparsers.add_parser("merge", help="Merge")
 
 merge_parser.add_argument(
