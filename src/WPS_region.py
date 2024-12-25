@@ -84,7 +84,7 @@ def WPS_chrom(chrom="chr1", step=10):
     chrom_reads = Intersecter()
     chrom_regions = regions[regions[0] == chrom][[1, 2]].astype(int)
     if len(chrom_regions) == 0:
-        return []
+        return None
     for read in bamfile.fetch(chrom, multiple_iterators=True):
         chrom_reads.add_interval(Interval(read.reference_start, read.reference_end))
     print("Read fetching done: %s" % chrom)
