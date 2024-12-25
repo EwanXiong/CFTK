@@ -55,6 +55,10 @@ parser.add_option(
 )
 
 parser.add_option(
+    "--mean", dest="mean", help="Return mean WPS for each region", action="store_true"
+)
+
+parser.add_option(
     "-o",
     "--out",
     dest="outfile",
@@ -92,15 +96,22 @@ def WPS_chrom(chrom="chr1", step=10):
                 else:
                     comCount += 1
             single_pos_wps.append(comCount - endCount)
-        region_wps.append(np.mean(single_pos_wps))
+        # region_wps.append(np.mean(single_pos_wps))
+        region_wps.append(single_pos_wps)
     print("WPS calculation done: %s" % chrom)
     return np.array(region_wps)
 
 
 all_chrom_WPS = Parallel(n_jobs=core, verbose=1, backend="multiprocessing")(
-    delayed(WPS_chrom)(chrom,step) for chrom in chrom_list
+    delayed(WPS_chrom)(chrom, step) for chrom in chrom_list
 )
 
-#pickle.dump(    np.hstack(all_chrom_WPS) * (1000000 / bamfile.count()), open(options.outfile, "wb"))
+# pickle.dump(    np.hstack(all_chrom_WPS) * (1000000 / bamfile.count()), open(options.outfile, "wb"))
+if options.mean:
+    (np.hstack(all_chrom_WPS).mean(axis=1) * (1000000 / bamfile.count())).tofile(
+        options.outfile.rsplit(".", 1)[0] + "_mean.txt", sep="\n"
+    )
 
-(np.hstack(all_chrom_WPS) * (1000000 / bamfile.count())).tofile(options.outfile, sep="\n")
+(np.hstack(all_chrom_WPS) * (1000000 / bamfile.count())).tofile(
+    options.outfile, sep="\n"
+)
