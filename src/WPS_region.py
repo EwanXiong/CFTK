@@ -77,6 +77,8 @@ step = options.wpsstep
 chrom_list = ["chr" + str(_) for _ in list(range(1, 23)) + ["X", "Y"]]
 core = options.core
 
+norm_factor = 1000000 / bamfile.count()
+
 
 def WPS_chrom(chrom="chr1", step=10):
     chrom_reads = Intersecter()
@@ -99,37 +101,15 @@ def WPS_chrom(chrom="chr1", step=10):
                     comCount += 1
             single_pos_wps.append(comCount - endCount)
         # region_wps.append(np.mean(single_pos_wps))
-        region_wps.append(np.array(single_pos_wps))
+        region_wps.append((chrom, ra, rb, np.array(single_pos_wps)))
     print("WPS calculation done: %s" % chrom)
+    region_wps = pd.DataFrame(region_wps, columns=["chr", "start", "end", "WPS"])
+    region_wps["WPS"] = region_wps["WPS"] * norm_factor
+    region_wps["mean_WPS"] = region_wps["WPS"].apply(lambda x: np.mean(x))
     return region_wps
 
 
 all_chrom_WPS = Parallel(n_jobs=core, verbose=1, backend="multiprocessing")(
     delayed(WPS_chrom)(chrom, step) for chrom in chrom_list
 )
-
-# pickle.dump(    np.hstack(all_chrom_WPS) * (1000000 / bamfile.count()), open(options.outfile, "wb"))
-if options.mean:
-    (
-        np.hstack([np.array([np.mean(i) for i in _]) for _ in all_chrom_WPS])
-        * (1000000 / bamfile.count())
-    ).tofile(options.outfile.rsplit(".", 1)[0] + "_mean.txt", sep="\n")
-
-# (np.hstack(all_chrom_WPS) * (1000000 / bamfile.count())).tofile(
-#     options.outfile, sep="\n"
-# )
-
-temp_list = []
-for i in all_chrom_WPS:
-    temp_list.extend(i)
-
-# with open(options.outfile, "w") as file:
-#     for idx, array in enumerate(temp_list):
-#         np.savetxt(
-#             file,
-#             array.reshape(1, -1) * (1000000 / bamfile.count()),
-#             fmt="%f",
-#             delimiter=",",
-#         )  # Save each array as a row
-
-pickle.dump(temp_list, open(options.outfile + ".pkl", "wb"))
+pd.concat(all_chrom_WPS).to_csv(options.outfile, sep="\t", index=False)
