@@ -81,6 +81,8 @@ core = options.core
 def WPS_chrom(chrom="chr1", step=10):
     chrom_reads = Intersecter()
     chrom_regions = regions[regions[0] == chrom][[1, 2]].astype(int)
+    if len(chrom_regions) == 0:
+        return []
     for read in bamfile.fetch(chrom, multiple_iterators=True):
         chrom_reads.add_interval(Interval(read.reference_start, read.reference_end))
     print("Read fetching done: %s" % chrom)
@@ -121,11 +123,13 @@ temp_list = []
 for i in all_chrom_WPS:
     temp_list.extend(i)
 
-with open(options.outfile, "w") as file:
-    for idx, array in enumerate(temp_list):
-        np.savetxt(
-            file,
-            array.reshape(1, -1) * (1000000 / bamfile.count()),
-            fmt="%f",
-            delimiter=",",
-        )  # Save each array as a row
+# with open(options.outfile, "w") as file:
+#     for idx, array in enumerate(temp_list):
+#         np.savetxt(
+#             file,
+#             array.reshape(1, -1) * (1000000 / bamfile.count()),
+#             fmt="%f",
+#             delimiter=",",
+#         )  # Save each array as a row
+
+pickle.dump(temp_list, open(options.outfile + ".pkl", "wb"))
