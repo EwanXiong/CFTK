@@ -515,7 +515,7 @@ def process(args):
         # )
         region_file = args.region
         if args.wps_args:
-            command = "python %s/WPS_region.py -b %s -r %s -t %s -o %s %s|| exit 1;" % (
+            command = "python %s/WPS_region.py -b %s -r %s -t %s -o %s --mean %s|| exit 1;" % (
                 src_path,
                 bam_input,
                 region_file,
@@ -524,7 +524,7 @@ def process(args):
                 args.wps_args,
             )
         else:
-            command = "python %s/WPS_region.py -b %s -r %s -t %s -o %s || exit 1;" % (
+            command = "python %s/WPS_region.py -b %s -r %s -t %s -o --mean %s || exit 1;" % (
                 src_path,
                 bam_input,
                 region_file,
