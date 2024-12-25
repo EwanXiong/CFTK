@@ -97,9 +97,9 @@ def WPS_chrom(chrom="chr1", step=10):
                     comCount += 1
             single_pos_wps.append(comCount - endCount)
         # region_wps.append(np.mean(single_pos_wps))
-        region_wps.append(single_pos_wps)
+        region_wps.append(np.array(single_pos_wps))
     print("WPS calculation done: %s" % chrom)
-    return np.array(region_wps)
+    return region_wps
 
 
 all_chrom_WPS = Parallel(n_jobs=core, verbose=1, backend="multiprocessing")(
@@ -108,10 +108,24 @@ all_chrom_WPS = Parallel(n_jobs=core, verbose=1, backend="multiprocessing")(
 
 # pickle.dump(    np.hstack(all_chrom_WPS) * (1000000 / bamfile.count()), open(options.outfile, "wb"))
 if options.mean:
-    (np.hstack(all_chrom_WPS).mean(axis=1) * (1000000 / bamfile.count())).tofile(
-        options.outfile.rsplit(".", 1)[0] + "_mean.txt", sep="\n"
-    )
+    (
+        np.hstack([np.array([np.mean(i) for i in _]) for _ in all_chrom_WPS])
+        * (1000000 / bamfile.count())
+    ).tofile(options.outfile.rsplit(".", 1)[0] + "_mean.txt", sep="\n")
 
-(np.hstack(all_chrom_WPS) * (1000000 / bamfile.count())).tofile(
-    options.outfile, sep="\n"
-)
+# (np.hstack(all_chrom_WPS) * (1000000 / bamfile.count())).tofile(
+#     options.outfile, sep="\n"
+# )
+
+temp_list = []
+for i in all_chrom_WPS:
+    temp_list.extend(i)
+
+with open(options.outfile, "w") as file:
+    for idx, array in enumerate(temp_list):
+        np.savetxt(
+            file,
+            array.reshape(1, -1) * (1000000 / bamfile.count()),
+            fmt="%f",
+            delimiter=",",
+        )  # Save each array as a row

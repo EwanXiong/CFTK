@@ -488,10 +488,16 @@ def process(args):
             disp("%s doesn't exist. Creating it for you." % args.wps_output_dir)
             os.mkdir(args.wps_output_dir)
         disp("Output:\n")
-        print(
-            "%s.occupancy.tsv" % args.prefix,
-            file=sys.stderr,
-        )
+        if args.prefix:
+            print(
+                "%s.wps.txt" % args.prefix,
+                file=sys.stderr,
+            )
+        else:
+            print(
+                "%s.wps.txt" % bam_input.split("/")[-1].rsplit(".", 1)[0],
+                file=sys.stderr,
+            )
         if 3 in args.step:
             bam_input = (
                 str(args.picard_output_dir).strip() + "/%s.markup.bam" % args.prefix
