@@ -103,16 +103,6 @@ def WPS_chrom(chrom="chr1", step=10, short=False, long=False):
     print("Read fetching done: %s" % chrom)
     region_wps = []
     if short:
-        chrom_regions = chrom_regions[
-            ((chrom_regions[1] - chrom_regions[0] + 1) <= 80)
-            & ((chrom_regions[1] - chrom_regions[0] + 1) >= 35)
-        ]
-    elif long:
-        chrom_regions = chrom_regions[
-            ((chrom_regions[1] - chrom_regions[0] + 1) <= 180)
-            & ((chrom_regions[1] - chrom_regions[0] + 1) >= 120)
-        ]
-    if short:
         for ra, rb in chrom_regions.values:
             single_pos_wps = []
             for pos in range(ra, rb + 1, step):
