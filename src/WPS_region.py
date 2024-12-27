@@ -59,6 +59,21 @@ parser.add_option(
 )
 
 parser.add_option(
+    "--all",
+    dest="all",
+    help="Calculate WPS for fragments with any length",
+    action="store_true",
+)
+
+parser.add_option(
+    "--short", dest="short", help="Calculate S-WPS(35-80bp)", action="store_true"
+)
+
+parser.add_option(
+    "--long", dest="long", help="Calculate L-WPS(120-180bp)", action="store_true"
+)
+
+parser.add_option(
     "-o",
     "--out",
     dest="outfile",
@@ -80,15 +95,25 @@ core = options.core
 norm_factor = 1000000 / bamfile.count()
 
 
-def WPS_chrom(chrom="chr1", step=10):
+def WPS_chrom(chrom="chr1", step=10, short=False, long=False):
     chrom_reads = Intersecter()
     chrom_regions = regions[regions[0] == chrom][[1, 2]].astype(int)
-    if len(chrom_regions) == 0:
-        return None
     for read in bamfile.fetch(chrom, multiple_iterators=True):
         chrom_reads.add_interval(Interval(read.reference_start, read.reference_end))
     print("Read fetching done: %s" % chrom)
     region_wps = []
+    if short:
+        chrom_regions = chrom_regions[
+            ((chrom_regions[1] - chrom_regions[0] + 1) <= 80)
+            & ((chrom_regions[1] - chrom_regions[0] + 1) >= 35)
+        ]
+    elif long:
+        chrom_regions = chrom_regions[
+            ((chrom_regions[1] - chrom_regions[0] + 1) <= 180)
+            & ((chrom_regions[1] - chrom_regions[0] + 1) >= 120)
+        ]
+    if len(chrom_regions) == 0:
+        return None
     for ra, rb in chrom_regions.values:
         single_pos_wps = []
         for pos in range(ra, rb + 1, step):
@@ -109,7 +134,35 @@ def WPS_chrom(chrom="chr1", step=10):
     return region_wps
 
 
-all_chrom_WPS = Parallel(n_jobs=core, verbose=1, backend="multiprocessing")(
-    delayed(WPS_chrom)(chrom, step) for chrom in chrom_list
-)
-pd.concat(all_chrom_WPS).to_csv(options.outfile, sep="\t", index=False)
+if options.short:
+    all_chrom_sWPS = Parallel(n_jobs=core, verbose=1, backend="multiprocessing")(
+        delayed(WPS_chrom)(chrom, step, short=True) for chrom in chrom_list
+    )
+    pd.concat(all_chrom_sWPS).to_csv(
+        options.outfile.rsplit(".", 1)[0]
+        + ".short."
+        + options.outfile.rsplit(".", 1)[1],
+        sep="\t",
+        index=False,
+    )
+if options.long:
+    all_chrom_lWPS = Parallel(n_jobs=core, verbose=1, backend="multiprocessing")(
+        delayed(WPS_chrom)(chrom, step, long=True) for chrom in chrom_list
+    )
+    pd.concat(all_chrom_lWPS).to_csv(
+        options.outfile.rsplit(".", 1)[0]
+        + ".long."
+        + options.outfile.rsplit(".", 1)[1],
+        sep="\t",
+        index=False,
+    )
+if options.all:
+    all_chrom_WPS = Parallel(n_jobs=core, verbose=1, backend="multiprocessing")(
+        delayed(WPS_chrom)(chrom, step) for chrom in chrom_list
+    )
+    pd.concat(all_chrom_WPS).to_csv(
+        options.outfile.rsplit(".", 1)[0] + ".all." + options.outfile.rsplit(".", 1)[1],
+        sep="\t",
+        index=False,
+    )
+sys.exit(0)
