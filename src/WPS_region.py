@@ -112,21 +112,51 @@ def WPS_chrom(chrom="chr1", step=10, short=False, long=False):
             ((chrom_regions[1] - chrom_regions[0] + 1) <= 180)
             & ((chrom_regions[1] - chrom_regions[0] + 1) >= 120)
         ]
-    if len(chrom_regions) == 0:
-        return None
-    for ra, rb in chrom_regions.values:
-        single_pos_wps = []
-        for pos in range(ra, rb + 1, step):
-            endCount, comCount = 0, 0
-            wa, wb = pos - windowSize, pos + windowSize
-            for read in chrom_reads.find(wa, wb):
-                if (read.start > wa) or (read.end < wb):
-                    endCount += 1
-                else:
-                    comCount += 1
-            single_pos_wps.append(comCount - endCount)
-        # region_wps.append(np.mean(single_pos_wps))
-        region_wps.append((chrom, ra, rb, np.array(single_pos_wps)))
+    if short:
+        for ra, rb in chrom_regions.values:
+            single_pos_wps = []
+            for pos in range(ra, rb + 1, step):
+                endCount, comCount = 0, 0
+                wa, wb = pos - windowSize, pos + windowSize
+                for read in chrom_reads.find(wa, wb):
+                    if (read.end-read.start+1)<=80 and (read.end-read.start+1)>=35:
+                        if (read.start > wa) or (read.end < wb):
+                            endCount += 1
+                        else:
+                            comCount += 1
+                single_pos_wps.append(comCount - endCount)
+            # region_wps.append(np.mean(single_pos_wps))
+            region_wps.append((chrom, ra, rb, np.array(single_pos_wps)))
+    elif long:
+        for ra, rb in chrom_regions.values:
+            single_pos_wps = []
+            for pos in range(ra, rb + 1, step):
+                endCount, comCount = 0, 0
+                wa, wb = pos - windowSize, pos + windowSize
+                for read in chrom_reads.find(wa, wb):
+                    if (read.end-read.start+1)<=180 and (read.end-read.start+1)>=120:
+                        if (read.start > wa) or (read.end < wb):
+                            endCount += 1
+                        else:
+                            comCount += 1
+                single_pos_wps.append(comCount - endCount)
+            # region_wps.append(np.mean(single_pos_wps))
+            region_wps.append((chrom, ra, rb, np.array(single_pos_wps)))
+    else:
+        for ra, rb in chrom_regions.values:
+            single_pos_wps = []
+            for pos in range(ra, rb + 1, step):
+                endCount, comCount = 0, 0
+                wa, wb = pos - windowSize, pos + windowSize
+                for read in chrom_reads.find(wa, wb):
+                    if (read.start > wa) or (read.end < wb):
+                        endCount += 1
+                    else:
+                        comCount += 1
+                single_pos_wps.append(comCount - endCount)
+            # region_wps.append(np.mean(single_pos_wps))
+            region_wps.append((chrom, ra, rb, np.array(single_pos_wps)))
+    
     print("WPS calculation done: %s" % chrom)
     region_wps = pd.DataFrame(region_wps, columns=["chr", "start", "end", "WPS"])
     region_wps["WPS"] = region_wps["WPS"] * norm_factor
