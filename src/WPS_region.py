@@ -156,6 +156,10 @@ if options.long:
         sep="\t",
         index=False,
     )
+
+if not (options.short or options.long):
+    options.all = True
+    
 if options.all:
     all_chrom_WPS = Parallel(n_jobs=core, verbose=1, backend="multiprocessing")(
         delayed(WPS_chrom)(chrom, step) for chrom in chrom_list
