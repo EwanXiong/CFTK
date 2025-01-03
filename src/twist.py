@@ -426,6 +426,14 @@ power_parser.add_argument(
 
 power_parser.add_argument("-@", "--cores", type=int, default=-1)
 
+analysis_parser = subparsers.add_parser("analysis", help="Basic analysis.")
+power_parser.add_argument(
+    "-o",
+    "--output-dir",
+    dest="output_dir",
+    help="output directory",
+    default=os.getcwd(),
+)
 
 args = parser.parse_args()
 if args.mode == "init":
@@ -451,3 +459,7 @@ if args.mode == "mesa":
 if args.mode == "power":
     util.disp("Power analysis.")
     util.power(args)
+    
+if args.mode == "analysis":
+    util.disp("Basic analysis.")
+    util.analysis(args)

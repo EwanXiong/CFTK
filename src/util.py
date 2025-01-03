@@ -51,6 +51,9 @@ def is_number(s):
 
 
 def init(args):
+    args.__dict__ = Merge(
+        json.load(open("./twist_init.json", "r")), args.__dict__
+    )  # This operation will overwrite the values in the init JSON file if the same key is present in the args object.
     with open("./twist_init.json", "w") as f:
         json.dump(args.__dict__, f, indent=2)
     if args.output_dir == os.getcwd():
@@ -111,7 +114,9 @@ def process(args):
             "Prefix for output is not specified. Using input files' name as prefix: %s\n"
             % args.prefix,
         )
-    args.__dict__ = Merge(json.load(open("./twist_init.json", "r")), args.__dict__)
+    args.__dict__ = Merge(
+        json.load(open("./twist_init.json", "r")), args.__dict__
+    )  # This operation will overwrite the values in the init JSON file if the same key is present in the args object.
     with open("./twist_init.json", "w") as f:
         json.dump(args.__dict__, f, indent=2)
     if len(args.infile) == 0:
@@ -521,21 +526,27 @@ def process(args):
         # )
         region_file = args.region
         if args.wps_args:
-            command = "python %s/WPS_region.py -b %s -r %s -t %s -o %s --mean %s|| exit 1;" % (
-                src_path,
-                bam_input,
-                region_file,
-                args.cores,
-                wps_output,
-                args.wps_args,
+            command = (
+                "python %s/WPS_region.py -b %s -r %s -t %s -o %s --mean %s|| exit 1;"
+                % (
+                    src_path,
+                    bam_input,
+                    region_file,
+                    args.cores,
+                    wps_output,
+                    args.wps_args,
+                )
             )
         else:
-            command = "python %s/WPS_region.py -b %s -r %s -t %s -o %s --mean|| exit 1;" % (
-                src_path,
-                bam_input,
-                region_file,
-                args.cores,
-                wps_output,
+            command = (
+                "python %s/WPS_region.py -b %s -r %s -t %s -o %s --mean|| exit 1;"
+                % (
+                    src_path,
+                    bam_input,
+                    region_file,
+                    args.cores,
+                    wps_output,
+                )
             )
 
         disp("Running:\n %s\n" % command)
@@ -897,6 +908,37 @@ def power(args):
     )
     os.system(command)
     disp(f"Power analysis completed. Results saved in {args.output_dir}.")
+    return
+
+
+from sklearn.decomposition import PCA
+from sklearn.preprocessing import StandardScaler
+
+
+def analysis(args):
+    if args.pca:
+        disp("Performing PCA analysis.")
+        input = pd.read_csv(args.infile, sep="\t", index_col=0).T
+        pca = PCA(n_components=10).fit_transform(input)
+        pc = pd.DataFrame(
+            pca, index=input.index, columns=[f"PC{i}" for i in range(1, 11)]
+        )
+        f, ax = plt.subplots(figsize=(4, 4))
+        sns.set_theme(context="talk", style="ticks")
+        if args.label:
+            label = pd.read_table(args.label, header=None, index_col=0)
+            sns.scatterplot(
+                data=pc, x="PC1", y="PC2", hue=label, ax=ax
+            )  # add explanation ratio
+        else:
+            sns.scatterplot(data=pc, x="PC1", y="PC2", ax=ax)
+        ax.set(ylabel=f"PC2{pca.explained_variance_ratio_[1]}", xlabel=f"PC1{pca.explained_variance_ratio_[0]}")
+        ax.figure.savefig(
+            args.output_dir + "/PCA_plot.png", bbox_inches="tight", dpi=500
+        )
+        pca.to_csv(args.output_dir + "/10PCs.tsv", sep="\t")
+        disp("PCA analysis completed.")
+    # plot
     return
 
 
