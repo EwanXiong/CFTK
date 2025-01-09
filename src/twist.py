@@ -427,12 +427,32 @@ power_parser.add_argument(
 power_parser.add_argument("-@", "--cores", type=int, default=-1)
 
 analysis_parser = subparsers.add_parser("analysis", help="Basic analysis.")
-power_parser.add_argument(
+analysis_parser.add_argument(
     "-o",
     "--output-dir",
     dest="output_dir",
     help="output directory",
     default=os.getcwd(),
+)
+
+analysis_parser.add_argument(
+    "--label",
+    help="Label for phenotpyes/status"
+)
+
+analysis_parser.add_argument(
+    "--pca",
+    help="Perform PCA analysis",
+)
+
+analysis_parser.add_argument(
+    "--violin",
+    help="Violin plot for metrics",
+)
+
+analysis_parser.add_argument(
+    "--heatmap",
+    help="Heatmap plot for metrics",
 )
 
 args = parser.parse_args()

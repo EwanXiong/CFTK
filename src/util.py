@@ -932,12 +932,58 @@ def analysis(args):
             )  # add explanation ratio
         else:
             sns.scatterplot(data=pc, x="PC1", y="PC2", ax=ax)
-        ax.set(ylabel=f"PC2{pca.explained_variance_ratio_[1]}", xlabel=f"PC1{pca.explained_variance_ratio_[0]}")
+        ax.set(
+            ylabel=f"PC2{pca.explained_variance_ratio_[1]}",
+            xlabel=f"PC1{pca.explained_variance_ratio_[0]}",
+        )
         ax.figure.savefig(
             args.output_dir + "/PCA_plot.png", bbox_inches="tight", dpi=500
         )
         pca.to_csv(args.output_dir + "/10PCs.tsv", sep="\t")
         disp("PCA analysis completed.")
+    if args.violin:
+        disp("Violin plot.")
+        input = pd.read_csv(args.infile, sep="\t", index_col=0)
+        if args.label:
+            label = pd.read_table(args.label, header=None, index_col=0)
+            input = pd.concat([input, label], axis=1)
+            input = input.melt(id_vars=input.columns[-1], value_vars=input.columns[:-1])
+            f, ax = plt.subplots(figsize=(4, 4))
+            sns.violinplot(
+                data=input, x="variable", y="value", hue=input.columns[-1], ax=ax
+            )
+            ax.figure.savefig(
+                args.output_dir + "/violin_plot.png", bbox_inches="tight", dpi=500
+            )
+        else:
+            disp("No label provided. Skipping violin plot analysis.")
+        disp("Violin plot done")
+    if args.heatmap:
+        disp("Heatmap plot.")
+        input = pd.read_csv(args.infile, sep="\t", index_col=0)
+        if args.label:
+            label = pd.read_table(args.label, header=None, index_col=0)
+            label_unique = label.iloc[:, 0].unique()
+            ax = sns.clustermap(
+                input,
+                col_colors=[
+                    "g" if _.startswith(label_unique[0]) else "r" for _ in label.columns
+                ],
+                yticklabels=False,
+                xticklabels=True,
+                cmap="rocket_r",
+                figsize=(4, 5),
+            )
+        else:
+            ax = sns.clustermap(
+                input,
+                yticklabels=False,
+                xticklabels=True,
+                cmap="rocket_r",
+                figsize=(4, 5),
+            )
+        plt.savefig(args.output_dir + "/heatmap.png", dpi=500, bbox_inches="tight")
+        disp("Heatmap plot done.")
     # plot
     return
 
