@@ -989,7 +989,7 @@ def analysis(args):
         plt.savefig(args.output_dir + "/heatmap.png", dpi=500, bbox_inches="tight")
         disp("Heatmap plot done.")
     if args.diff:
-        
+        disp("Differential analysis.")
     # plot
     return
 
