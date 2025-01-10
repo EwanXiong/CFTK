@@ -51,11 +51,15 @@ def is_number(s):
 
 
 def init(args):
-    args.__dict__ = Merge(
-        json.load(open("./twist_init.json", "r")), args.__dict__
-    )  # This operation will overwrite the values in the init JSON file if the same key is present in the args object.
-    with open("./twist_init.json", "w") as f:
-        json.dump(args.__dict__, f, indent=2)
+    if os.path.exists("./twist_init.json"):
+        disp("Initialization file found. Loading.")
+        args.__dict__ = Merge(
+            json.load(open("./twist_init.json", "r")), args.__dict__
+        )  # This operation will overwrite the values in the init JSON file if the same key is present in the args object.
+    else:
+        disp("Initialization file not found. Creating one.")
+        with open("./twist_init.json", "w") as f:
+            json.dump(args.__dict__, f, indent=2)
     if args.output_dir == os.getcwd():
         disp(
             "Output directory is not sepecified. Using current directory: %s"
@@ -984,6 +988,8 @@ def analysis(args):
             )
         plt.savefig(args.output_dir + "/heatmap.png", dpi=500, bbox_inches="tight")
         disp("Heatmap plot done.")
+    if args.diff:
+        
     # plot
     return
 
