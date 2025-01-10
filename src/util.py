@@ -144,7 +144,10 @@ def process(args):
             disp("Outputting to: %s" % args.trimgalore_output_dir)
         else:
             disp("%s doesn't exist. Creating it for you." % args.trimgalore_output_dir)
-            os.mkdir(args.trimgalore_output_dir)
+            try:
+                os.mkdir(args.trimgalore_output_dir)
+            except:
+                disp("Failed to create directory.")
         disp("Output:\n")
         print(
             "%s_val_1.fq(.gz)\n%s_val_2.fq(.gz)" % (args.prefix, args.prefix),
@@ -188,7 +191,10 @@ def process(args):
             disp("Outputting to: %s" % args.bwameth_output_dir)
         else:
             disp("%s doesn't exist. Creating it for you." % args.bwameth_output_dir)
-            os.mkdir(args.bwameth_output_dir)
+            try:
+                os.mkdir(args.bwameth_output_dir)
+            except:
+                disp("Failed to create directory.")
         disp("Output:\n")
         print(
             "%s.bam" % args.prefix,
@@ -258,7 +264,10 @@ def process(args):
             disp("Outputting to: %s" % args.picard_output_dir)
         else:
             disp("%s doesn't exist. Creating it for you." % args.picard_output_dir)
-            os.mkdir(args.picard_output_dir)
+            try:
+                os.mkdir(args.picard_output_dir)
+            except:
+                disp("Failed to create directory.")
         disp("Output:\n")
         print(
             "%s.markup.bam" % args.prefix,
@@ -320,7 +329,10 @@ def process(args):
             disp(
                 "%s doesn't exist. Creating it for you." % args.methyldackel_output_dir
             )
-            os.mkdir(args.methyldackel_output_dir)
+            try:
+                os.mkdir(args.methyldackel_output_dir)
+            except:
+                disp("Failed to create directory.")
         disp("Output:\n")
         print(
             "%s_CpG.bedGraph" % args.prefix,
@@ -404,7 +416,10 @@ def process(args):
             disp("Outputting to: %s" % args.danpos_output_dir)
         else:
             disp("%s doesn't exist. Creating it for you." % args.danpos_output_dir)
-            os.mkdir(args.danpos_output_dir)
+            try:
+                os.mkdir(args.danpos_output_dir)
+            except:
+                disp("Failed to create directory.")
         disp("Output:\n")
         print(
             "%s.occupancy.tsv" % args.prefix,
@@ -495,7 +510,10 @@ def process(args):
             disp("Outputting to: %s" % args.wps_output_dir)
         else:
             disp("%s doesn't exist. Creating it for you." % args.wps_output_dir)
-            os.mkdir(args.wps_output_dir)
+            try:
+                os.mkdir(args.wps_output_dir)
+            except:
+                disp("Failed to create directory.")
         disp("Output:\n")
         if args.prefix:
             print(
@@ -896,7 +914,10 @@ def power(args):
     disp("Output result to %s" % args.output_dir)
     if not (os.path.exists(args.output_dir) and os.path.isdir(args.output_dir)):
         disp("Directory does not exist! Creating it for you.")
-        os.mkdir(args.output_dir)
+        try:
+            os.mkdir(args.output_dir)
+        except:
+            disp("Failed to create directory.")
     command = (
         "python %s/power_analysis.py -s %s -e %s -o %s --cpg-std %s -p %s -@ %s --step-size %s|| exit 1;"
         % (
