@@ -121,8 +121,6 @@ def process(args):
     args.__dict__ = Merge(
         json.load(open("./twist_init.json", "r")), args.__dict__
     )  # This operation will overwrite the values in the init JSON file if the same key is present in the args object.
-    with open("./twist_init.json", "w") as f:
-        json.dump(args.__dict__, f, indent=2)
     if len(args.infile) == 0:
         disp("Input file error!\nCurrent input file(s):\n")
         print(args.infile, file=sys.stderr)
@@ -575,6 +573,8 @@ def process(args):
         os.system(command)
         disp("Complete: %s" % steps[6])
     disp("Completing all processes.")
+    with open("./twist_init.json", "w") as f:
+        json.dump(args.__dict__, f, indent=2)
 
 
 # Merge Module
@@ -944,11 +944,11 @@ def analysis(args):
     if args.pca:
         disp("Performing PCA analysis.")
         input = pd.read_csv(args.infile, sep="\t", index_col=0).T
-        pca = PCA(n_components=10).fit_transform(input)
+        pca = PCA(n_components=10)
         pc = pd.DataFrame(
-            pca, index=input.index, columns=[f"PC{i}" for i in range(1, 11)]
+            pca.fit_transform(input), index=input.index, columns=[f"PC{i}" for i in range(1, 11)]
         )
-        f, ax = plt.subplots(figsize=(4, 4))
+        f, ax = plt.subplots(figsize=(5, 5))
         sns.set_theme(context="talk", style="ticks")
         if args.label:
             label = pd.read_table(args.label, header=None, index_col=0)
@@ -958,8 +958,8 @@ def analysis(args):
         else:
             sns.scatterplot(data=pc, x="PC1", y="PC2", ax=ax)
         ax.set(
-            ylabel=f"PC2{pca.explained_variance_ratio_[1]}",
-            xlabel=f"PC1{pca.explained_variance_ratio_[0]}",
+            ylabel=f"PC2({pca.explained_variance_ratio_[1]:.3f})",
+            xlabel=f"PC1({pca.explained_variance_ratio_[0]:.3f})",
         )
         ax.figure.savefig(
             args.output_dir + "/PCA_plot.png", bbox_inches="tight", dpi=500
