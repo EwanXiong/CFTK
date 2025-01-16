@@ -573,8 +573,11 @@ def process(args):
         os.system(command)
         disp("Complete: %s" % steps[6])
     disp("Completing all processes.")
-    with open("./twist_init.json", "w") as f:
-        json.dump(args.__dict__, f, indent=2)
+    try:
+        with open("./twist_init.json", "w") as f:
+            json.dump(args.__dict__, f, indent=2)
+    except:
+        disp("Failed to write initilization file.")
 
 
 # Merge Module
