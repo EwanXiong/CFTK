@@ -268,7 +268,7 @@ def process(args):
                 disp("Failed to create directory.")
         disp("Output:\n")
         print(
-            "%s.markup.bam" % args.prefix,
+            "%s.markdup.bam" % args.prefix,
             file=sys.stderr,
         )
         if 2 in args.step:
@@ -280,7 +280,7 @@ def process(args):
             bam_input = args.infile[0]
         if args.picard_args:
             command = (
-                "%s MarkDuplicates I=%s O=%s/%s.markup.bam R=%s M=%s/%s.markdup_raw_metrics \
+                "%s MarkDuplicates I=%s O=%s/%s.markdup.bam R=%s M=%s/%s.markdup_raw_metrics \
                 SORTING_COLLECTION_SIZE_RATIO=0.15 ASSUME_SORT_ORDER=coordinate \
                 OPTICAL_DUPLICATE_PIXEL_DISTANCE=2500 MAX_RECORDS_IN_RAM=1000 %s || exit 1;"
                 % (
@@ -293,12 +293,12 @@ def process(args):
                     args.prefix,
                     args.picard_args,
                 )
-                + "samtools index -@ %s %s/%s.markup.bam|| exit 1;"
+                + "samtools index -@ %s %s/%s.markdup.bam|| exit 1;"
                 % (args.cores, args.picard_output_dir, args.prefix)
             )
         else:
             command = (
-                "%s MarkDuplicates I=%s O=%s/%s.markup.bam R=%s M=%s/%s.markdup_raw_metrics \
+                "%s MarkDuplicates I=%s O=%s/%s.markdup.bam R=%s M=%s/%s.markdup_raw_metrics \
                 SORTING_COLLECTION_SIZE_RATIO=0.15 ASSUME_SORT_ORDER=coordinate \
                 OPTICAL_DUPLICATE_PIXEL_DISTANCE=2500 MAX_RECORDS_IN_RAM=1000 || exit 1;"
                 % (
@@ -310,7 +310,7 @@ def process(args):
                     args.picard_output_dir,
                     args.prefix,
                 )
-                + "samtools index -@ %s %s/%s.markup.bam|| exit 1;"
+                + "samtools index -@ %s %s/%s.markdup.bam|| exit 1;"
                 % (args.cores, args.picard_output_dir, args.prefix)
             )
         disp("Running:\n %s\n" % command)
@@ -338,7 +338,7 @@ def process(args):
         )
         if 3 in args.step:
             bam_input = (
-                str(args.picard_output_dir).strip() + "/%s.markup.bam" % args.prefix
+                str(args.picard_output_dir).strip() + "/%s.markdup.bam" % args.prefix
             )
         else:
             message = "Processing sample(s):\n"
@@ -425,7 +425,7 @@ def process(args):
         )
         if 3 in args.step:
             bam_input = (
-                str(args.picard_output_dir).strip() + "/%s.markup.bam" % args.prefix
+                str(args.picard_output_dir).strip() + "/%s.markdup.bam" % args.prefix
             )
             danpos_wig_output = "%s/pooled/%s.markdup.Fnor.smooth.wig" % (
                 args.danpos_output_dir,
@@ -525,7 +525,7 @@ def process(args):
             )
         if 3 in args.step:
             bam_input = (
-                str(args.picard_output_dir).strip() + "/%s.markup.bam" % args.prefix
+                str(args.picard_output_dir).strip() + "/%s.markdup.bam" % args.prefix
             )
             wps_output = "%s/%s.wps.txt" % (
                 args.wps_output_dir,
