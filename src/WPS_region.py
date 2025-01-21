@@ -92,7 +92,7 @@ step = options.wpsstep
 chrom_list = ["chr" + str(_) for _ in list(range(1, 23)) + ["X", "Y"]]
 core = options.core
 
-norm_factor = 1000000 / bamfile.count()
+#norm_factor = 1000000 / bamfile.count()
 print("@%s \t%s" % (time.asctime(), 'Files loaded.'), file=sys.stderr)
 
 def WPS_chrom(chrom="chr1", step=10, short=False, long=False):
@@ -149,7 +149,7 @@ def WPS_chrom(chrom="chr1", step=10, short=False, long=False):
     
     print("WPS calculation done: %s" % chrom)
     region_wps = pd.DataFrame(region_wps, columns=["chr", "start", "end", "WPS"])
-    region_wps["WPS"] = region_wps["WPS"] * norm_factor
+    #region_wps["WPS"] = region_wps["WPS"] * norm_factor
     region_wps["mean_WPS"] = region_wps["WPS"].apply(lambda x: np.mean(x))
     return region_wps
 
