@@ -13,7 +13,7 @@ import numpy as np
 import pandas as pd
 from joblib import Parallel, delayed
 import pickle
-
+import time
 parser = OptionParser()
 parser.add_option(
     "-b",
@@ -93,7 +93,7 @@ chrom_list = ["chr" + str(_) for _ in list(range(1, 23)) + ["X", "Y"]]
 core = options.core
 
 norm_factor = 1000000 / bamfile.count()
-
+print("@%s \t%s" % (time.asctime(), 'Files loaded.'), file=sys.stderr)
 
 def WPS_chrom(chrom="chr1", step=10, short=False, long=False):
     chrom_reads = Intersecter()
@@ -155,9 +155,13 @@ def WPS_chrom(chrom="chr1", step=10, short=False, long=False):
 
 
 if options.short:
-    all_chrom_sWPS = Parallel(n_jobs=core, verbose=1, backend="multiprocessing")(
+    print("@%s \t%s" % (time.asctime(), 'Short WPS calculation starts.'), file=sys.stderr)
+    all_chrom_sWPS = Parallel(n_jobs=core, verbose=10, backend="multiprocessing")(
         delayed(WPS_chrom)(chrom, step, short=True) for chrom in chrom_list
     )
+    print("@%s \t%s" % (time.asctime(), f'Short WPS calculation completed. Saving to {options.outfile.rsplit(".", 1)[0]
+        + ".short."
+        + options.outfile.rsplit(".", 1)[1]}'), file=sys.stderr)
     pd.concat(all_chrom_sWPS).to_csv(
         options.outfile.rsplit(".", 1)[0]
         + ".short."
@@ -166,9 +170,13 @@ if options.short:
         index=False,
     )
 if options.long:
-    all_chrom_lWPS = Parallel(n_jobs=core, verbose=1, backend="multiprocessing")(
+    print("@%s \t%s" % (time.asctime(), 'Long WPS calculation starts.'), file=sys.stderr)
+    all_chrom_lWPS = Parallel(n_jobs=core, verbose=10, backend="multiprocessing")(
         delayed(WPS_chrom)(chrom, step, long=True) for chrom in chrom_list
     )
+    print("@%s \t%s" % (time.asctime(), f'Short WPS calculation completed. Saving to {options.outfile.rsplit(".", 1)[0]
+        + ".long."
+        + options.outfile.rsplit(".", 1)[1]}'), file=sys.stderr)
     pd.concat(all_chrom_lWPS).to_csv(
         options.outfile.rsplit(".", 1)[0]
         + ".long."
@@ -181,7 +189,7 @@ if not (options.short or options.long):
     options.all = True
     
 if options.all:
-    all_chrom_WPS = Parallel(n_jobs=core, verbose=1, backend="multiprocessing")(
+    all_chrom_WPS = Parallel(n_jobs=core, verbose=10, backend="multiprocessing")(
         delayed(WPS_chrom)(chrom, step) for chrom in chrom_list
     )
     pd.concat(all_chrom_WPS).to_csv(
