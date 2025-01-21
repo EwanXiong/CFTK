@@ -159,9 +159,8 @@ if options.short:
     all_chrom_sWPS = Parallel(n_jobs=core, verbose=10, backend="multiprocessing")(
         delayed(WPS_chrom)(chrom, step, short=True) for chrom in chrom_list
     )
-    print("@%s \t%s" % (time.asctime(), f'Short WPS calculation completed. Saving to {options.outfile.rsplit(".", 1)[0]
-        + ".short."
-        + options.outfile.rsplit(".", 1)[1]}'), file=sys.stderr)
+    print("@%s \t%s" % (time.asctime(), 'Short WPS calculation completed.'), file=sys.stderr)
+    print("@%s \t%s" % (time.asctime(), 'Saving to %s' %(options.outfile.rsplit(".", 1)[0]+ ".short."+ options.outfile.rsplit(".", 1)[1])), file=sys.stderr)
     pd.concat(all_chrom_sWPS).to_csv(
         options.outfile.rsplit(".", 1)[0]
         + ".short."
@@ -174,9 +173,8 @@ if options.long:
     all_chrom_lWPS = Parallel(n_jobs=core, verbose=10, backend="multiprocessing")(
         delayed(WPS_chrom)(chrom, step, long=True) for chrom in chrom_list
     )
-    print("@%s \t%s" % (time.asctime(), f'Short WPS calculation completed. Saving to {options.outfile.rsplit(".", 1)[0]
-        + ".long."
-        + options.outfile.rsplit(".", 1)[1]}'), file=sys.stderr)
+    print("@%s \t%s" % (time.asctime(), 'Long WPS calculation completed.'), file=sys.stderr)
+    print("@%s \t%s" % (time.asctime(), 'Saving to %s' %(options.outfile.rsplit(".", 1)[0]+ ".long."+ options.outfile.rsplit(".", 1)[1])), file=sys.stderr)
     pd.concat(all_chrom_lWPS).to_csv(
         options.outfile.rsplit(".", 1)[0]
         + ".long."
