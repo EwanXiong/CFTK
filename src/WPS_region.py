@@ -14,6 +14,8 @@ import pandas as pd
 from joblib import Parallel, delayed
 import pickle
 import time
+from tqdm import tqdm
+
 parser = OptionParser()
 parser.add_option(
     "-b",
@@ -100,7 +102,7 @@ def WPS_chrom(chrom="chr1", step=10, short=False, long=False):
     chrom_reads = Intersecter()
     chrom_regions = regions[regions[0] == chrom][[1, 2]].astype(int)
     bamfile = pysam.AlignmentFile(options.bam_path, "rb")
-    for read in bamfile.fetch(chrom, multiple_iterators=True):
+    for read in tqdm(bamfile.fetch(chrom, multiple_iterators=True)):
         chrom_reads.add_interval(Interval(read.reference_start, read.reference_end))
     bamfile.close()
     print("Read fetching done: %s" % chrom)
