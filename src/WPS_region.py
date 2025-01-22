@@ -90,6 +90,7 @@ regions = pd.read_csv(options.region_path, sep="\t", header=None)
 windowSize = options.windowSize // 2
 step = options.wpsstep
 chrom_list = ["chr" + str(_) for _ in list(range(1, 23)) + ["X", "Y"]]
+chrom_list = [_ for _ in chrom_list if _ in regions.iloc[:, 0].unique()]
 core = options.core
 
 #norm_factor = 1000000 / bamfile.count()
