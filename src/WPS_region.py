@@ -105,7 +105,8 @@ def WPS_chrom(chrom="chr1", step=10, short=False, long=False):
     for read in tqdm(bamfile.fetch(chrom, multiple_iterators=True)):
         chrom_reads.add_interval(Interval(read.reference_start, read.reference_end))
     bamfile.close()
-    print("Read fetching done: %s" % chrom)
+    print("Read fetching done: %s" % chrom, file=sys.stderr)
+    print("WPS calculation: %s" % chrom, file=sys.stderr)
     region_wps = []
     if short:
         for ra, rb in chrom_regions.values:
@@ -152,7 +153,7 @@ def WPS_chrom(chrom="chr1", step=10, short=False, long=False):
             # region_wps.append(np.mean(single_pos_wps))
             region_wps.append((chrom, ra, rb, np.array(single_pos_wps)))
     
-    print("WPS calculation done: %s" % chrom)
+    print("WPS calculation done: %s" % chrom, file=sys.stderr)
     region_wps = pd.DataFrame(region_wps, columns=["chr", "start", "end", "WPS"])
     #region_wps["WPS"] = region_wps["WPS"] * norm_factor
     region_wps["mean_WPS"] = region_wps["WPS"].apply(lambda x: np.mean(x))
