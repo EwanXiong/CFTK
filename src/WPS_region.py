@@ -95,15 +95,17 @@ chrom_list = ["chr" + str(_) for _ in list(range(1, 23)) + ["X", "Y"]]
 chrom_list = [_ for _ in chrom_list if _ in regions.iloc[:, 0].unique()]
 core = options.core
 
-#norm_factor = 1000000 / bamfile.count()
-print("@%s \t%s" % (time.asctime(), 'Files loaded.'), file=sys.stderr)
+# norm_factor = 1000000 / bamfile.count()
+print("@%s \t%s" % (time.asctime(), "Files loaded."), file=sys.stderr)
+
 
 def WPS_chrom(chrom="chr1", step=10, short=False, long=False):
     chrom_reads = Intersecter()
     chrom_regions = regions[regions[0] == chrom][[1, 2]].astype(int)
     bamfile = pysam.AlignmentFile(options.bam_path, "rb")
-    for read in bamfile.fetch(chrom, multiple_iterators=True):
-        chrom_reads.add_interval(Interval(read.reference_start, read.reference_end))
+    for ra, rb in chrom_regions.values:
+        for read in bamfile.fetch(chrom, ra, rb, multiple_iterators=True):
+            chrom_reads.add_interval(Interval(read.reference_start, read.reference_end))
     bamfile.close()
     print("Read fetching done: %s" % chrom, file=sys.stderr)
     print("WPS calculation: %s" % chrom, file=sys.stderr)
@@ -115,7 +117,9 @@ def WPS_chrom(chrom="chr1", step=10, short=False, long=False):
                 endCount, comCount = 0, 0
                 wa, wb = pos - windowSize, pos + windowSize
                 for read in chrom_reads.find(wa, wb):
-                    if (read.end-read.start+1)<=80 and (read.end-read.start+1)>=35:
+                    if (read.end - read.start + 1) <= 80 and (
+                        read.end - read.start + 1
+                    ) >= 35:
                         if (read.start > wa) or (read.end < wb):
                             endCount += 1
                         else:
@@ -130,7 +134,9 @@ def WPS_chrom(chrom="chr1", step=10, short=False, long=False):
                 endCount, comCount = 0, 0
                 wa, wb = pos - windowSize, pos + windowSize
                 for read in chrom_reads.find(wa, wb):
-                    if (read.end-read.start+1)<=180 and (read.end-read.start+1)>=120:
+                    if (read.end - read.start + 1) <= 180 and (
+                        read.end - read.start + 1
+                    ) >= 120:
                         if (read.start > wa) or (read.end < wb):
                             endCount += 1
                         else:
@@ -152,21 +158,38 @@ def WPS_chrom(chrom="chr1", step=10, short=False, long=False):
                 single_pos_wps.append(comCount - endCount)
             # region_wps.append(np.mean(single_pos_wps))
             region_wps.append((chrom, ra, rb, np.array(single_pos_wps)))
-    
+
     print("WPS calculation done: %s" % chrom, file=sys.stderr)
     region_wps = pd.DataFrame(region_wps, columns=["chr", "start", "end", "WPS"])
-    #region_wps["WPS"] = region_wps["WPS"] * norm_factor
+    # region_wps["WPS"] = region_wps["WPS"] * norm_factor
     region_wps["mean_WPS"] = region_wps["WPS"].apply(lambda x: np.mean(x))
     return region_wps
 
 
 if options.short:
-    print("@%s \t%s" % (time.asctime(), 'Short WPS calculation starts.'), file=sys.stderr)
+    print(
+        "@%s \t%s" % (time.asctime(), "Short WPS calculation starts."), file=sys.stderr
+    )
     all_chrom_sWPS = Parallel(n_jobs=core, verbose=10, backend="multiprocessing")(
         delayed(WPS_chrom)(chrom, step, short=True) for chrom in chrom_list
     )
-    print("@%s \t%s" % (time.asctime(), 'Short WPS calculation completed.'), file=sys.stderr)
-    print("@%s \t%s" % (time.asctime(), 'Saving to %s' %(options.outfile.rsplit(".", 1)[0]+ ".short."+ options.outfile.rsplit(".", 1)[1])), file=sys.stderr)
+    print(
+        "@%s \t%s" % (time.asctime(), "Short WPS calculation completed."),
+        file=sys.stderr,
+    )
+    print(
+        "@%s \t%s"
+        % (
+            time.asctime(),
+            "Saving to %s"
+            % (
+                options.outfile.rsplit(".", 1)[0]
+                + ".short."
+                + options.outfile.rsplit(".", 1)[1]
+            ),
+        ),
+        file=sys.stderr,
+    )
     pd.concat(all_chrom_sWPS).to_csv(
         options.outfile.rsplit(".", 1)[0]
         + ".short."
@@ -175,12 +198,29 @@ if options.short:
         index=False,
     )
 if options.long:
-    print("@%s \t%s" % (time.asctime(), 'Long WPS calculation starts.'), file=sys.stderr)
+    print(
+        "@%s \t%s" % (time.asctime(), "Long WPS calculation starts."), file=sys.stderr
+    )
     all_chrom_lWPS = Parallel(n_jobs=core, verbose=10, backend="multiprocessing")(
         delayed(WPS_chrom)(chrom, step, long=True) for chrom in chrom_list
     )
-    print("@%s \t%s" % (time.asctime(), 'Long WPS calculation completed.'), file=sys.stderr)
-    print("@%s \t%s" % (time.asctime(), 'Saving to %s' %(options.outfile.rsplit(".", 1)[0]+ ".long."+ options.outfile.rsplit(".", 1)[1])), file=sys.stderr)
+    print(
+        "@%s \t%s" % (time.asctime(), "Long WPS calculation completed."),
+        file=sys.stderr,
+    )
+    print(
+        "@%s \t%s"
+        % (
+            time.asctime(),
+            "Saving to %s"
+            % (
+                options.outfile.rsplit(".", 1)[0]
+                + ".long."
+                + options.outfile.rsplit(".", 1)[1]
+            ),
+        ),
+        file=sys.stderr,
+    )
     pd.concat(all_chrom_lWPS).to_csv(
         options.outfile.rsplit(".", 1)[0]
         + ".long."
@@ -191,7 +231,7 @@ if options.long:
 
 if not (options.short or options.long):
     options.all = True
-    
+
 if options.all:
     all_chrom_WPS = Parallel(n_jobs=core, verbose=10, backend="multiprocessing")(
         delayed(WPS_chrom)(chrom, step) for chrom in chrom_list
