@@ -159,7 +159,7 @@ def WPS_chrom(chrom="chr1", step=10, short=False, long=False):
 
 if options.short:
     print("@%s \t%s" % (time.asctime(), 'Short WPS calculation starts.'), file=sys.stderr)
-    all_chrom_sWPS = Parallel(n_jobs=core, verbose=10, backend="threading")(
+    all_chrom_sWPS = Parallel(n_jobs=core, verbose=10, backend="multiprocessing")(
         delayed(WPS_chrom)(chrom, step, short=True) for chrom in chrom_list
     )
     print("@%s \t%s" % (time.asctime(), 'Short WPS calculation completed.'), file=sys.stderr)
@@ -173,7 +173,7 @@ if options.short:
     )
 if options.long:
     print("@%s \t%s" % (time.asctime(), 'Long WPS calculation starts.'), file=sys.stderr)
-    all_chrom_lWPS = Parallel(n_jobs=core, verbose=10, backend="threading")(
+    all_chrom_lWPS = Parallel(n_jobs=core, verbose=10, backend="multiprocessing")(
         delayed(WPS_chrom)(chrom, step, long=True) for chrom in chrom_list
     )
     print("@%s \t%s" % (time.asctime(), 'Long WPS calculation completed.'), file=sys.stderr)
@@ -190,7 +190,7 @@ if not (options.short or options.long):
     options.all = True
     
 if options.all:
-    all_chrom_WPS = Parallel(n_jobs=core, verbose=10, backend="threading")(
+    all_chrom_WPS = Parallel(n_jobs=core, verbose=10, backend="multiprocessing")(
         delayed(WPS_chrom)(chrom, step) for chrom in chrom_list
     )
     pd.concat(all_chrom_WPS).to_csv(
