@@ -102,6 +102,7 @@ def WPS_chrom(chrom="chr1", step=10, short=False, long=False):
     bamfile = pysam.AlignmentFile(options.bam_path, "rb")
     for read in bamfile.fetch(chrom, multiple_iterators=True):
         chrom_reads.add_interval(Interval(read.reference_start, read.reference_end))
+    bamfile.close()
     print("Read fetching done: %s" % chrom)
     region_wps = []
     if short:
