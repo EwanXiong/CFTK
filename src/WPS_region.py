@@ -113,7 +113,7 @@ def WPS_chrom(chrom="chr1", step=10, short=False, long=False):
     if short:
         for ra, rb in chrom_regions.values:
             single_pos_wps = []
-            for pos in range(ra, rb + 1, step):
+            for pos in range(r  a, rb + 1, step):
                 endCount, comCount = 0, 0
                 wa, wb = pos - windowSize, pos + windowSize
                 for read in chrom_reads.find(wa, wb):
