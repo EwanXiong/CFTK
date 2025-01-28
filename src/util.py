@@ -458,9 +458,10 @@ def process(args):
             )
         src_path = os.path.dirname(__file__)
         chrom_sizes = os.path.dirname(src_path) + "/hg38.chrom.sizes"
-        region_file = (
-            os.path.dirname(src_path) + "/hg38_annotated_collapsed_TSS_PAS_1kb.bed"
-        )
+        # region_file = (
+        #     os.path.dirname(src_path) + "/hg38_annotated_collapsed_TSS_PAS_1kb.bed"
+        # )
+        region_file = args.region
         if args.danpos_args:
             command = (
                 "python %s dpos %s --paired 1 -u 0 -c 1000000 -o %s %s && \
@@ -655,11 +656,14 @@ def qc(args):
     if args.step == 1:
         disp("Plotting distribution plot for methylation beta values.")
         input_matrix = pd.read_table(args.infile)
-        sns.set_context("paper", font_scale=1.5)
         f, ax = plt.subplots(figsize=(4, 4))
-        sns.kdeplot(
-            input_matrix.melt(), x="value", hue="variable", cut=0, alpha=0.8
-        ).savefig(args.output, dpi=500, bbox_inches="tight")
+        #ax.set_xlim(0, 1)
+        xmin, xmax = np.nanmin(input_matrix), np.nanmax(input_matrix)
+        input_matrix.iloc[::args.step_size, :].plot.density(ax=ax,
+                                                        ind=np.linspace(xmin, xmax, 300))
+        ax.set(xlabel='Methylation')
+        ax.legend(bbox_to_anchor=(1, 1), frameon=False, fontsize='small').set_visible(args.legend)
+        f.savefig(args.output, dpi=500, bbox_inches="tight")
 
     if args.step == 2:
         disp("Plotting distribution plot for fragment length.")

@@ -274,6 +274,16 @@ QC_parser.add_argument(
     "-f", "--fragment", help="Fragment length to check", type=int, default=167
 )
 
+QC_parser.add_argument("--legend", help="Display figure legend", action="store_true")
+
+QC_parser.add_argument(
+    "--step-size",
+    dest="step_size"
+    help="Step size for methylation distribution density plot(a small step size increases plotting time)",
+    type=int,
+    default=2000,
+)
+
 mesa_parser = subparsers.add_parser("mesa", help="MESA.")
 mesa_parser.add_argument(
     "-o",
@@ -435,10 +445,7 @@ analysis_parser.add_argument(
     default=os.getcwd(),
 )
 
-analysis_parser.add_argument(
-    "--label",
-    help="Label for phenotpyes/status"
-)
+analysis_parser.add_argument("--label", help="Label for phenotpyes/status")
 
 analysis_parser.add_argument(
     "--pca",
@@ -479,7 +486,7 @@ if args.mode == "mesa":
 if args.mode == "power":
     util.disp("Power analysis.")
     util.power(args)
-    
+
 if args.mode == "analysis":
     util.disp("Basic analysis.")
     util.analysis(args)
