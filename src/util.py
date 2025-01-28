@@ -783,8 +783,8 @@ def qc(args):
                     np.array(
                         [
                             [row[0]] * 250,
-                            np.arange(row[1] - temp_, row[2] + temp_ + 1),
-                            np.arange(row[1] - temp_ + 2, row[2] + temp_ + 3),
+                            np.arange(row[1] - temp_, row[2] + temp_),
+                            np.arange(row[1] - temp_ + 2, row[2] + temp_ + 2),
                             np.arange(250),
                             [row[3]] * 250,
                         ]
@@ -792,6 +792,7 @@ def qc(args):
                     delimiter="\t",
                     fmt="%s",
                 )
+
         def process_pattern(pattern, ref, bed_file, output_prefix):
             command = (
                 "bedtools nuc -pattern {pattern} -C -fi {ref} "
@@ -803,12 +804,15 @@ def qc(args):
                 output_prefix=output_prefix,
             )
             os.system(command)
-        
+
         dinu_list = ["AA", "AT", "TA", "TT", "GG", "GC", "CG", "GC"]
         ref = args.ref  # Reference file
         bed_file = f"{dinu_freq_output_prefix}.all_fragment.window2bp"
         output_prefix = f"{dinu_freq_output_prefix}.all_fragment"
-        Parallel(n_jobs=-1,verbose=1)(delayed(process_pattern)(pattern, ref, bed_file, output_prefix) for pattern in dinu_list)
+        Parallel(n_jobs=-1, verbose=1)(
+            delayed(process_pattern)(pattern, ref, bed_file, output_prefix)
+            for pattern in dinu_list
+        )
     disp("QC completed.")
 
 
