@@ -749,13 +749,7 @@ def qc(args):
 
             command = (
                 "bedtools bamtobed -bedpe -mate1 -i %s 2> /dev/null |" % f
-                + "awk -v OFS='\t' -v sample=%s -v cr1=%s -v cr2=%s\
-                '{if($9=='+')\
-                {($2-cr1<$5)?start=$2-cr1:start=$5;\
-                ($3>$6+cr2)?end=$3:end=$6+cr2;print $1,start,end,sample} \
-                else{($2<$5-cr1)?start=$2:start=$5-cr1; \
-                ($3+cr2>$6)?end=$3+cr2:end=$6; print $1,start,end,sample}}' | \
-                awk -v OFS='\t' '$3-$2==%s{print $1,$2,$3,$4}' >> %s.all_fragment"
+                + "awk -v OFS='\t' -v sample=%s -v cr1=%s -v cr2=%s '{if($9=='+'){($2-cr1<$5)?start=$2-cr1:start=$5;($3>$6+cr2)?end=$3:end=$6+cr2;print $1,start,end,sample} else{($2<$5-cr1)?start=$2:start=$5-cr1; ($3+cr2>$6)?end=$3+cr2:end=$6; print $1,start,end,sample}}' | awk -v OFS='\t' '$3-$2==%s {print $1,$2,$3,$4}' >> %s.all_fragment"
                 % (
                     sample_id,
                     args.clip_r1,
