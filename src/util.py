@@ -857,8 +857,9 @@ def qc(args):
             ax=ax
         )
         ax.set(
-            xlabel="Position relative to cneter of %sbp fragment" % args.fragment,
+            xlabel="Position relative to center of %sbp fragment" % args.fragment,
             title=args.title if args.title else None,
+            ylabel="Dinucleotide fraction (%)",
         )
         ax.legend(frameon=False, fontsize="small")
         f.savefig(args.output, dpi=500, bbox_inches="tight", format="png")
