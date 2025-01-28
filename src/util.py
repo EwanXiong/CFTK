@@ -748,14 +748,25 @@ def qc(args):
             # bed file for every complete fragment
 
             command = (
-                "bedtools bamtobed -bedpe -mate1 -i %s 2> /dev/null |" % f
-                + "awk -v OFS='\t' -v sample=%s -v cr1=%s -v cr2=%s '{if($9=='+'){($2-cr1<$5)?start=$2-cr1:start=$5;($3>$6+cr2)?end=$3:end=$6+cr2;print $1,start,end,sample} else{($2<$5-cr1)?start=$2:start=$5-cr1; ($3+cr2>$6)?end=$3+cr2:end=$6; print $1,start,end,sample}}' | awk -v OFS='\t' '$3-$2==%s {print $1,$2,$3,$4}' >> %s.all_fragment"
+                "bedtools bamtobed -bedpe -mate1 -i %s 2> /dev/null | "
+                "awk -v OFS='\t' -v sample=%s -v cr1=%s -v cr2=%s '{"
+                "if ($9 == \"+\") {"
+                "    start = ($2 - cr1 < $5) ? $2 - cr1 : $5;"
+                "    end = ($3 > $6 + cr2) ? $3 : $6 + cr2;"
+                "    print $1, start, end, sample;"
+                "} else {"
+                "    start = ($2 < $5 - cr1) ? $2 : $5 - cr1;"
+                "    end = ($3 + cr2 > $6) ? $3 + cr2 : $6;"
+                "    print $1, start, end, sample;"
+                "}}' | "
+                "awk -v OFS='\t' '$3 - $2 == %s {print $1, $2, $3, $4}' >> %s.all_fragment"
                 % (
-                    sample_id,
-                    args.clip_r1,
-                    args.clip_r2,
-                    args.fragment,
-                    dinu_freq_output_prefix + "." + sample_id,
+                    f,  # Input file for bedtools
+                    sample_id,  # Sample ID
+                    args.clip_r1,  # Value for cr1
+                    args.clip_r2,  # Value for cr2
+                    args.fragment,  # Fragment length
+                    dinu_freq_output_prefix + "." + sample_id,  # Output prefix
                 )
             )
             os.system(command)
