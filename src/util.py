@@ -781,6 +781,9 @@ def qc(args):
             "%s.all_fragment" % dinu_freq_output_prefix, header=None
         )
         temp_ = int((250 - args.fragment) / 2)
+
+        if os.path.exists(f"{dinu_freq_output_prefix}.all_fragment.window2bp"):
+            os.remove(f"{dinu_freq_output_prefix}.all_fragment.window2bp")
         with open("%s.all_fragment.window2bp" % dinu_freq_output_prefix, "ab") as f:
             for idx, row in fragment_windows.iterrows():
                 # f.write(b"\n")
