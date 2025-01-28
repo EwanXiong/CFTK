@@ -745,9 +745,11 @@ def qc(args):
         dinu_freq_output_prefix = args.output.rsplit(".", 1)[0]
         if args.ref is None:
             disp(
-                "ERROR: reference genome is not specified(-r is required for dinucleotide frequency calcultion). Exiting..."
+                "ERROR: reference genome is not specified(-r is required for dinucleotide frequency calculation). Exiting..."
             )
             return 1
+        if os.path.exists(f"{dinu_freq_output_prefix}.all_fragment"):
+            os.remove(f"{dinu_freq_output_prefix}.all_fragment")
         for f in args.infile:
             sample_id = str(f).split("/")[-1].rsplit(".", 1)[0]
             # bed file for every complete fragment
@@ -814,7 +816,7 @@ def qc(args):
         ref = args.ref  # Reference file
         bed_file = f"{dinu_freq_output_prefix}.all_fragment.window2bp"
         output_prefix = f"{dinu_freq_output_prefix}.all_fragment"
-        Parallel(n_jobs=-1, verbose=1)(
+        Parallel(n_jobs=args.cores, verbose=1)(
             delayed(process_pattern)(pattern, ref, bed_file, output_prefix)
             for pattern in dinu_list
         )
@@ -853,8 +855,7 @@ def qc(args):
 
         ax = sns.lineplot(dinuc_result_sum_all)
         # specfiy axis labels
-        ax.set(xlabel="Position relative to cneter of 147bp fragment")
-
+        ax.set(xlabel="Position relative to cneter of %sbp fragment" % args.fragment)
     disp("QC completed.")
 
 
