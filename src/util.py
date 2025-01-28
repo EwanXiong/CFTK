@@ -7,7 +7,7 @@ import matplotlib.pyplot as plt
 import shlex, subprocess
 from modality_performance import *
 from xgboost import XGBClassifier
-
+from joblib import Parallel, delayed
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.linear_model import LogisticRegression
 from sklearn.svm import SVC
@@ -750,7 +750,7 @@ def qc(args):
             command = (
                 "bedtools bamtobed -bedpe -mate1 -i %s 2> /dev/null | "
                 "awk -v OFS='\t' -v sample=%s -v cr1=%s -v cr2=%s '{"
-                "if ($9 == \"+\") {"
+                'if ($9 == "+") {'
                 "    start = ($2 - cr1 < $5) ? $2 - cr1 : $5;"
                 "    end = ($3 > $6 + cr2) ? $3 : $6 + cr2;"
                 "    print $1, start, end, sample;"
@@ -759,23 +759,23 @@ def qc(args):
                 "    end = ($3 + cr2 > $6) ? $3 + cr2 : $6;"
                 "    print $1, start, end, sample;"
                 "}}' | "
-                "awk -v OFS='\t' '$3 - $2 == %s {print $1, $2, $3, $4}' >> %s.all_fragment"
+                "awk -v OFS='\t' '$3 - $2 == %s {print $1, $2, $3, $4}' >> %s.all_fragment || exit 1;"
                 % (
                     f,  # Input file for bedtools
                     sample_id,  # Sample ID
                     args.clip_r1,  # Value for cr1
                     args.clip_r2,  # Value for cr2
                     args.fragment,  # Fragment length
-                    dinu_freq_output_prefix + "." + sample_id,  # Output prefix
+                    dinu_freq_output_prefix,  # Output prefix
                 )
             )
             os.system(command)
-
+        disp("bamtobed completed.")
         fragment_windows = pd.read_table(
-            "%s.*.all_fragment" % dinu_freq_output_prefix, header=None
+            "%s.all_fragment" % dinu_freq_output_prefix, header=None
         )
         temp_ = int((250 - args.fragment / 2))
-        with open(args.output, "ab") as f:
+        with open("%s.all_fragment.window2bp" % dinu_freq_output_prefix, "ab") as f:
             for idx, row in fragment_windows.iterrows():
                 # f.write(b"\n")
                 np.savetxt(
@@ -792,7 +792,23 @@ def qc(args):
                     delimiter="\t",
                     fmt="%s",
                 )
-
+        def process_pattern(pattern, ref, bed_file, output_prefix):
+            command = (
+                "bedtools nuc -pattern {pattern} -C -fi {ref} "
+                "-bed {bed_file} > {output_prefix}_{pattern}.txt"
+            ).format(
+                pattern=pattern,
+                ref=ref,
+                bed_file=bed_file,
+                output_prefix=output_prefix,
+            )
+            os.system(command)
+        
+        dinu_list = ["AA", "AT", "TA", "TT", "GG", "GC", "CG", "GC"]
+        ref = args.ref  # Reference file
+        bed_file = f"{dinu_freq_output_prefix}.all_fragment.window2bp"
+        output_prefix = f"{dinu_freq_output_prefix}.all_fragment"
+        Parallel(n_jobs=-1,verbose=1)(delayed(process_pattern)(pattern, ref, bed_file, output_prefix) for pattern in dinu_list)
     disp("QC completed.")
 
 
