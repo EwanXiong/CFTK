@@ -774,7 +774,7 @@ def qc(args):
         fragment_windows = pd.read_table(
             "%s.all_fragment" % dinu_freq_output_prefix, header=None
         )
-        temp_ = int((250 - args.fragment / 2))
+        temp_ = int((250 - args.fragment) / 2)
         with open("%s.all_fragment.window2bp" % dinu_freq_output_prefix, "ab") as f:
             for idx, row in fragment_windows.iterrows():
                 # f.write(b"\n")
