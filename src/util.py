@@ -667,7 +667,7 @@ def qc(args):
         ax.legend(bbox_to_anchor=(1, 1), frameon=False, fontsize="small").set_visible(
             args.legend
         )
-        f.savefig(args.output, dpi=500, bbox_inches="tight")
+        f.savefig(args.output, dpi=500, bbox_inches="tight", format="png")
         disp("Done. Saved to: %s." % args.output)
 
     if args.step == 2:
@@ -733,11 +733,7 @@ def qc(args):
             ylabel="% fragments",
             title=args.title if args.title else None,
         )
-        ax.figure.savefig(
-            args.output,
-            dpi=500,
-            bbox_inches="tight",
-        )
+        ax.figure.savefig(args.output, dpi=500, bbox_inches="tight", format="png")
         disp("Done. Saved to: %s." % args.output)
 
     if args.step == 3:
@@ -814,10 +810,11 @@ def qc(args):
             )
             os.system(command)
 
-        dinu_list = ["AA", "AT", "TA", "TT", "GG", "GC", "CG", "GC"]
+        dinu_list = ["AA", "AT", "TA", "TT", "GG", "GC", "CG", "CC"]
         ref = args.ref  # Reference file
         bed_file = f"{dinu_freq_output_prefix}.all_fragment.window2bp"
         output_prefix = f"{dinu_freq_output_prefix}.all_fragment"
+
         Parallel(n_jobs=args.cores, verbose=1)(
             delayed(process_pattern)(pattern, ref, bed_file, output_prefix)
             for pattern in dinu_list
@@ -844,7 +841,7 @@ def qc(args):
                 )
                 .groupby("4_usercol")
                 .sum()
-                for dinuc in ["GG", "GC", "CG", "GC"]
+                for dinuc in ["GG", "GC", "CG", "CC"]
             ],
             axis=1,
         )
@@ -852,12 +849,19 @@ def qc(args):
         dinuc_result_sum_all = pd.concat(
             [dinuc_result_sum_AT.mean(axis=1), dinuc_result_sum_CG.mean(axis=1)], axis=1
         )
-        dinuc_result_sum_all.columns = ["AA/AT/TA/TT", "GG/GC/CG/GC"]
+        dinuc_result_sum_all.columns = ["AA/AT/TA/TT", "GG/GC/CG/CC"]
         dinuc_result_sum_all.index = np.arange(-int(250 / 2), int(250 / 2))
 
-        ax = sns.lineplot(dinuc_result_sum_all)
-        # specfiy axis labels
-        ax.set(xlabel="Position relative to cneter of %sbp fragment" % args.fragment)
+        f, ax = plt.subplots(figsize=(6, 5))
+        (100 * dinuc_result_sum_all / dinuc_result_sum_all.values.sum()).plot.line(
+            ax=ax
+        )
+        ax.set(
+            xlabel="Position relative to cneter of %sbp fragment" % args.fragment,
+            title=args.title if args.title else None,
+        )
+        ax.legend(frameon=False, fontsize="small")
+        f.savefig(args.output, dpi=500, bbox_inches="tight", format="png")
     disp("QC completed.")
 
 
