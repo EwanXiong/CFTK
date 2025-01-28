@@ -266,6 +266,7 @@ QC_parser.add_argument(
     "-r",
     "--ref",
     help="Reference genome fasta file(required for dinucleotide frequency calculation)",
+    default=None
 )
 
 QC_parser.add_argument(

@@ -741,11 +741,11 @@ def qc(args):
         disp("Done. Saved to: %s." % args.output)
 
     if args.step == 3:
-        disp("Plotting dinucleotide frequency of fragments.")
+        disp("Plotting dinucleotide frequency of %sbp fragments." % args.fragment)
         dinu_freq_output_prefix = args.output.rsplit(".", 1)[0]
-        if not args.ref:
+        if args.ref is None:
             disp(
-                "Reference genome is not specified(-r is required for dinucleotide frequency calcultion). Exiting..."
+                "ERROR: reference genome is not specified(-r is required for dinucleotide frequency calcultion). Exiting..."
             )
             return 1
         for f in args.infile:
@@ -818,6 +818,43 @@ def qc(args):
             delayed(process_pattern)(pattern, ref, bed_file, output_prefix)
             for pattern in dinu_list
         )
+
+        dinuc_result_sum_AT = pd.concat(
+            [
+                pd.read_table(
+                    f"{dinu_freq_output_prefix}.all_fragment_{dinuc}.txt",
+                    usecols=["4_usercol", "15_user_patt_count"],
+                )
+                .groupby("4_usercol")
+                .sum()
+                for dinuc in ["AA", "AT", "TA", "TT"]
+            ],
+            axis=1,
+        )
+
+        dinuc_result_sum_CG = pd.concat(
+            [
+                pd.read_table(
+                    f"{dinu_freq_output_prefix}.all_fragment_{dinuc}.txt",
+                    usecols=["4_usercol", "15_user_patt_count"],
+                )
+                .groupby("4_usercol")
+                .sum()
+                for dinuc in ["GG", "GC", "CG", "GC"]
+            ],
+            axis=1,
+        )
+
+        dinuc_result_sum_all = pd.concat(
+            [dinuc_result_sum_AT.mean(axis=1), dinuc_result_sum_CG.mean(axis=1)], axis=1
+        )
+        dinuc_result_sum_all.columns = ["AA/AT/TA/TT", "GG/GC/CG/GC"]
+        dinuc_result_sum_all.index = np.arange(-73 - 51, 73 + 53)
+
+        ax = sns.lineplot(dinuc_result_sum_all)
+        # specfiy axis labels
+        ax.set(xlabel="Position relative to cneter of 147bp fragment")
+
     disp("QC completed.")
 
 
