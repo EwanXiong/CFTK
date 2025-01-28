@@ -278,7 +278,7 @@ QC_parser.add_argument("--legend", help="Display figure legend", action="store_t
 
 QC_parser.add_argument(
     "--step-size",
-    dest="step_size"
+    dest="step_size",
     help="Step size for methylation distribution density plot(a small step size increases plotting time)",
     type=int,
     default=2000,
