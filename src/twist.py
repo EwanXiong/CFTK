@@ -238,7 +238,7 @@ merge_parser.add_argument(
     help="Output file",
 )
 
-QC_parser = subparsers.add_parser("QC", help="QC")
+QC_parser = subparsers.add_parser("qc", help="Quality control.")
 
 QC_parser.add_argument(
     "infile", type=str, help="input file", nargs="+"
