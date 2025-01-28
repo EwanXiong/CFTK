@@ -689,7 +689,7 @@ def qc(args):
         fragment_length_all = []
         for i in glob.glob("%s.*.raw_length.csv" % fragment_length_output_prefix):
             temp = pd.read_table(i, skiprows=1).iloc[:, :2]
-            temp["Sample"] = i.rsplit("/", 1)[1].rsplit("_",1)[0]
+            temp["Sample"] = i.rsplit("/", 1)[1].rsplit("_", 1)[0]
             fragment_length_all.append(temp)
 
         fragment_length = pd.concat(
@@ -711,13 +711,13 @@ def qc(args):
         sns.set_context("paper", font_scale=1.5)
         f, ax = plt.subplots(figsize=(4, 4))
         temp = (100 * mean_fragment_length / mean_fragment_length.sum()).reset_index()
-        temp.columns = ['length', 'ratio']
-        temp.length = temp.length+args.clip_r1+args.clip_r2
+        temp.columns = ["length", "ratio"]
+        temp.length = temp.length + args.clip_r1 + args.clip_r2
         sns.lineplot(x=temp.iloc[:, 0], y=temp.iloc[:, 1], ax=ax, linewidth=2)
-        peak_length = temp['length'][temp['ratio'].idxmax()]
+        peak_length = temp["length"][temp["ratio"].idxmax()]
         ax.plot(
             (peak_length, peak_length),
-            (-1, temp['ratio'].max()),
+            (-1, temp["ratio"].max()),
             linestyle="-.",
             linewidth=1,
             color="red",
@@ -728,16 +728,17 @@ def qc(args):
         ax.set(xticks=list(plt.xticks()[0]) + extraticks)
         ax.set(
             xlim=[peak_length - 99, peak_length + 99],
-            ylim=[temp['ratio'].min() - 0.05, temp['ratio'].max() + 0.05],
+            ylim=[temp["ratio"].min() - 0.05, temp["ratio"].max() + 0.05],
             xlabel="Fragment length(bp)",
             ylabel="% fragments",
-            title=args.title if args.title else None
+            title=args.title if args.title else None,
         )
         ax.figure.savefig(
             args.output,
             dpi=500,
             bbox_inches="tight",
         )
+        disp("Done. Saved to: %s." % args.output)
 
     if args.step == 3:
         disp("Plotting dinucleotide frequency of fragments.")
