@@ -663,7 +663,7 @@ def qc(args):
         input_matrix.iloc[:: args.step_size, :].plot.density(
             ax=ax, ind=np.linspace(xmin, xmax, 300)
         )
-        ax.set(xlabel="Methylation")
+        ax.set(xlabel="Methylation", title=args.title if args.title else None)
         ax.legend(bbox_to_anchor=(1, 1), frameon=False, fontsize="small").set_visible(
             args.legend
         )
@@ -742,13 +742,13 @@ def qc(args):
 
     if args.step == 3:
         disp("Plotting dinucleotide frequency of fragments.")
-
+        dinu_freq_output_prefix = args.output.rsplit(".", 1)[0]
         for f in args.infile:
-            sample_id = str(f).split("/")[-1].split(".")[0]
+            sample_id = str(f).split("/")[-1].rsplit(".", 1)[0]
             # bed file for every complete fragment
 
             command = (
-                "bedtools bamtobed -bedpe -mate1 -i ${bwameth_output_dir}/${sample_id}_sorted.bam |"
+                "bedtools bamtobed -bedpe -mate1 -i %s |"
                 + "awk -v OFS='\t' -v sample=%s -v cr1=%s -v cr2=%s\
                 '{if($9=='+')\
                 {($2-cr1<$5)?start=$2-cr1:start=$5;\
@@ -756,11 +756,19 @@ def qc(args):
                 else{($2<$5-cr1)?start=$2:start=$5-cr1; \
                 ($3+cr2>$6)?end=$3+cr2:end=$6; print $1,start,end,sample}}' | \
                 awk -v OFS='\t' '$3-$2==%s{print $1,$2,$3,$4}' >> %s.all_fragment"
-                % (sample_id, args.clip_r1, args.clip_r2, args.fragment, args.output)
+                % (
+                    f,
+                    args.clip_r1,
+                    args.clip_r2,
+                    args.fragment,
+                    dinu_freq_output_prefix + "." + sample_id,
+                )
             )
             os.system(command)
 
-        fragment_windows = pd.read_table("%s.all_fragment" % args.output, header=None)
+        fragment_windows = pd.read_table(
+            "%s.*.all_fragment" % dinu_freq_output_prefix, header=None
+        )
         temp_ = int((250 - args.fragment / 2))
         with open(args.output, "ab") as f:
             for idx, row in fragment_windows.iterrows():
