@@ -655,15 +655,20 @@ def merge(args):
 def qc(args):
     if args.step == 1:
         disp("Plotting distribution plot for methylation beta values.")
+        disp("Loadng input matrix: %s." % args.infile)
         input_matrix = pd.read_table(args.infile)
         f, ax = plt.subplots(figsize=(4, 4))
-        #ax.set_xlim(0, 1)
+        # ax.set_xlim(0, 1)
         xmin, xmax = np.nanmin(input_matrix), np.nanmax(input_matrix)
-        input_matrix.iloc[::args.step_size, :].plot.density(ax=ax,
-                                                        ind=np.linspace(xmin, xmax, 300))
-        ax.set(xlabel='Methylation')
-        ax.legend(bbox_to_anchor=(1, 1), frameon=False, fontsize='small').set_visible(args.legend)
+        input_matrix.iloc[:: args.step_size, :].plot.density(
+            ax=ax, ind=np.linspace(xmin, xmax, 300)
+        )
+        ax.set(xlabel="Methylation")
+        ax.legend(bbox_to_anchor=(1, 1), frameon=False, fontsize="small").set_visible(
+            args.legend
+        )
         f.savefig(args.output, dpi=500, bbox_inches="tight")
+        disp("Done. Saved to: %s." % args.output)
 
     if args.step == 2:
         disp("Plotting distribution plot for fragment length.")
@@ -953,7 +958,9 @@ def analysis(args):
         input = pd.read_csv(args.infile, sep="\t", index_col=0).T
         pca = PCA(n_components=10)
         pc = pd.DataFrame(
-            pca.fit_transform(input), index=input.index, columns=[f"PC{i}" for i in range(1, 11)]
+            pca.fit_transform(input),
+            index=input.index,
+            columns=[f"PC{i}" for i in range(1, 11)],
         )
         f, ax = plt.subplots(figsize=(5, 5))
         sns.set_theme(context="talk", style="ticks")
