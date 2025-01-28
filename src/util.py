@@ -743,6 +743,11 @@ def qc(args):
     if args.step == 3:
         disp("Plotting dinucleotide frequency of fragments.")
         dinu_freq_output_prefix = args.output.rsplit(".", 1)[0]
+        if not args.ref:
+            disp(
+                "Reference genome is not specified(-r is required for dinucleotide frequency calcultion). Exiting..."
+            )
+            return 1
         for f in args.infile:
             sample_id = str(f).split("/")[-1].rsplit(".", 1)[0]
             # bed file for every complete fragment
@@ -847,6 +852,7 @@ def mesa_performance(args):
         repeat=args.repeat,
         n_jobs=args.cores,
     )
+    disp("Done. Saved to")
     return performance
 
 

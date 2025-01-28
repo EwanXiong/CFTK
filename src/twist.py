@@ -197,7 +197,6 @@ process_parser.add_argument(
 )
 
 process_parser.add_argument(
-    "-r",
     "--region",
     dest="region",
     type=str,
@@ -244,6 +243,7 @@ QC_parser.add_argument(
     "infile", type=str, help="input file", nargs="+"
 )  ## positional argument
 
+
 QC_parser.add_argument(
     "-s",
     "--step",
@@ -260,6 +260,12 @@ QC_parser.add_argument(
     "--output",
     required=True,
     help="Output file",
+)
+
+QC_parser.add_argument(
+    "-r",
+    "--ref",
+    help="Reference genome fasta file(required for dinucleotide frequency calculation)",
 )
 
 QC_parser.add_argument(
