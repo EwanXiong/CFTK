@@ -655,8 +655,8 @@ def merge(args):
 def qc(args):
     if args.step == 1:
         disp("Plotting distribution plot for methylation beta values.")
-        disp("Loadng input matrix: %s." % args.infile)
-        input_matrix = pd.read_csv(args.infile, sep="\t", index_col=0)
+        disp("Loadng input matrix: %s." % args.infile[0])
+        input_matrix = pd.read_csv(args.infile[0], sep="\t", index_col=0)
         f, ax = plt.subplots(figsize=(4, 4))
         # ax.set_xlim(0, 1)
         xmin, xmax = np.nanmin(input_matrix), np.nanmax(input_matrix)
