@@ -748,7 +748,7 @@ def qc(args):
             # bed file for every complete fragment
 
             command = (
-                "bedtools bamtobed -bedpe -mate1 -i %s |" % f
+                "bedtools bamtobed -bedpe -mate1 -i %s 2> /dev/null |" % f
                 + "awk -v OFS='\t' -v sample=%s -v cr1=%s -v cr2=%s\
                 '{if($9=='+')\
                 {($2-cr1<$5)?start=$2-cr1:start=$5;\
