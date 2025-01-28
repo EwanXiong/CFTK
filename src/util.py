@@ -748,7 +748,7 @@ def qc(args):
             # bed file for every complete fragment
 
             command = (
-                "bedtools bamtobed -bedpe -mate1 -i %s |"
+                "bedtools bamtobed -bedpe -mate1 -i %s |" % f
                 + "awk -v OFS='\t' -v sample=%s -v cr1=%s -v cr2=%s\
                 '{if($9=='+')\
                 {($2-cr1<$5)?start=$2-cr1:start=$5;\
@@ -757,7 +757,7 @@ def qc(args):
                 ($3+cr2>$6)?end=$3+cr2:end=$6; print $1,start,end,sample}}' | \
                 awk -v OFS='\t' '$3-$2==%s{print $1,$2,$3,$4}' >> %s.all_fragment"
                 % (
-                    f,
+                    sample_id,
                     args.clip_r1,
                     args.clip_r2,
                     args.fragment,
