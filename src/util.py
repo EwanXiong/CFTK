@@ -753,7 +753,6 @@ def qc(args):
         for f in args.infile:
             sample_id = str(f).split("/")[-1].rsplit(".", 1)[0]
             # bed file for every complete fragment
-
             command = (
                 "bedtools bamtobed -bedpe -mate1 -i %s 2> /dev/null | "
                 "awk -v OFS='\t' -v sample=%s -v cr1=%s -v cr2=%s '{"
