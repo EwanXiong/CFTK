@@ -805,7 +805,7 @@ def qc(args):
         def process_pattern(pattern, ref, bed_file, output_prefix):
             command = (
                 "bedtools nuc -pattern {pattern} -C -fi {ref} "
-                "-bed {bed_file} > {output_prefix}_{pattern}.txt"
+                "-bed {bed_file} > {output_prefix}_{pattern}.txt || exit 1;"
             ).format(
                 pattern=pattern,
                 ref=ref,
@@ -853,7 +853,7 @@ def qc(args):
             [dinuc_result_sum_AT.mean(axis=1), dinuc_result_sum_CG.mean(axis=1)], axis=1
         )
         dinuc_result_sum_all.columns = ["AA/AT/TA/TT", "GG/GC/CG/GC"]
-        dinuc_result_sum_all.index = np.arange(-73 - 51, 73 + 53)
+        dinuc_result_sum_all.index = np.arange(-int(250 / 2), int(250 / 2))
 
         ax = sns.lineplot(dinuc_result_sum_all)
         # specfiy axis labels
