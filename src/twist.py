@@ -263,15 +263,31 @@ QC_parser.add_argument(
 )
 
 QC_parser.add_argument(
-    "--clip_R1", help="Timmed length from 5' end of read 1", type=int, default=0
+    "--clip-r1",
+    dest="clip_r1",
+    help="Trimmed length from 5' end of read 1",
+    type=int,
+    default=0,
 )
 
 QC_parser.add_argument(
-    "--clip_R2", help="Timmed length from 5' end of read 2", type=int, default=0
+    "--clip-r2",
+    dest="clip_r2",
+    help="Trimmed length from 5' end of read 2",
+    type=int,
+    default=0,
 )
 
+QC_parser.add_argument("-@", "--cores", type=int, default=1)
+
+QC_parser.add_argument("--title", default=None)
+
 QC_parser.add_argument(
-    "-f", "--fragment", help="Fragment length to check", type=int, default=167
+    "-f",
+    "--fragment",
+    help="Fragment length to check for dinucleotide frequency",
+    type=int,
+    default=167,
 )
 
 QC_parser.add_argument("--legend", help="Display figure legend", action="store_true")

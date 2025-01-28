@@ -672,23 +672,31 @@ def qc(args):
 
     if args.step == 2:
         disp("Plotting distribution plot for fragment length.")
+        fragment_length_output_prefix = args.output.rsplit(".", 1)[0]
         for f in args.infile:
             command = (
-                "bamPEFragmentSize --outRawFragmentLengths %s.%s.raw_length.csv -b %s"
-                % (args.output, f.split("/")[-1].split(".")[0], f)
+                "bamPEFragmentSize --outRawFragmentLengths %s.%s.raw_length.csv -hist %s.%s.hist.png -p %s -b %s"
+                % (
+                    fragment_length_output_prefix,
+                    f.split("/")[-1].split(".")[0],
+                    fragment_length_output_prefix,
+                    f.split("/")[-1].split(".")[0],
+                    args.cores,
+                    f,
+                )
             )
             os.system(command)
         fragment_length_all = []
-        for i in glob.glob("%s.*.raw_length.csv" % args.output):
+        for i in glob.glob("%s.*.raw_length.csv" % fragment_length_output_prefix):
             temp = pd.read_table(i, skiprows=1).iloc[:, :2]
-            temp["Sample"] = i.rsplit("/", 1)[1].split("_")[0]
+            temp["Sample"] = i.rsplit("/", 1)[1].rsplit("_",1)[0]
             fragment_length_all.append(temp)
 
-        mean_fragment_length = pd.concat(
+        fragment_length = pd.concat(
             [
                 pd.merge(
                     _,
-                    pd.DataFrame(np.arange(300), columns=["Size"]),
+                    pd.DataFrame(np.arange(500), columns=["Size"]),
                     on="Size",
                     how="outer",
                 )
@@ -698,28 +706,32 @@ def qc(args):
                 for _ in fragment_length_all
             ],
             axis=1,
-        ).mean(axis=1)
-
+        )
+        mean_fragment_length = fragment_length.mean(axis=1)
         sns.set_context("paper", font_scale=1.5)
         f, ax = plt.subplots(figsize=(4, 4))
-        temp = 100 * mean_fragment_length / mean_fragment_length.sum()
-        sns.lineplot(temp.values, ax=ax, linewidth=2)
+        temp = (100 * mean_fragment_length / mean_fragment_length.sum()).reset_index()
+        temp.columns = ['length', 'ratio']
+        temp.length = temp.length+args.clip_r1+args.clip_r2
+        sns.lineplot(x=temp.iloc[:, 0], y=temp.iloc[:, 1], ax=ax, linewidth=2)
+        peak_length = temp['length'][temp['ratio'].idxmax()]
         ax.plot(
-            (temp.argmax(), temp.argmax()),
-            (-1, temp.max()),
+            (peak_length, peak_length),
+            (-1, temp['ratio'].max()),
             linestyle="-.",
             linewidth=1,
             color="red",
             alpha=0.7,
         )
-        extraticks = [temp.argmax()]
+        extraticks = [peak_length]
         # plt.xticks(list(plt.xticks()[0]) + extraticks)
         ax.set(xticks=list(plt.xticks()[0]) + extraticks)
         ax.set(
-            xlim=[temp.argmax() - 99, temp.argmax() + 99],
-            ylim=[temp.min() - 0.05, temp.max() + 0.05],
+            xlim=[peak_length - 99, peak_length + 99],
+            ylim=[temp['ratio'].min() - 0.05, temp['ratio'].max() + 0.05],
             xlabel="Fragment length(bp)",
-            ylabel="% of fragments",
+            ylabel="% fragments",
+            title=args.title if args.title else None
         )
         ax.figure.savefig(
             args.output,
@@ -743,7 +755,7 @@ def qc(args):
                 else{($2<$5-cr1)?start=$2:start=$5-cr1; \
                 ($3+cr2>$6)?end=$3+cr2:end=$6; print $1,start,end,sample}}' | \
                 awk -v OFS='\t' '$3-$2==%s{print $1,$2,$3,$4}' >> %s.all_fragment"
-                % (sample_id, args.clip_R1, args.clip_R2, args.fragment, args.output)
+                % (sample_id, args.clip_r1, args.clip_r2, args.fragment, args.output)
             )
             os.system(command)
 
