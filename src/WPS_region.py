@@ -1,8 +1,38 @@
 #!/usr/bin/env python
-
 """
-:Author: Chaorong Chen
-:Date: 06/06/2024
+Author: Chaorong Chen
+Date: 06/06/2024
+
+Description:
+    This script calculates the Windowed Protection Score (WPS) for specified genomic regions using sequencing data from a BAM file.
+    It utilizes parallel processing to accelerate computations across multiple chromosomes.
+
+Usage:
+    python WPS_region.py -b <bam_file> -r <region_file> [options]
+
+Options:
+    -b, --bam       BAM file containing sequenced fragments.
+    -r, --region    BED file specifying the genomic regions to compute WPS.
+    -w, --window    Window size for calculating WPS (default: 120).
+    --wpsstep       Step size for WPS calculation (default: 10).
+    -t, --core      Number of cores for parallel processing (default: 1).
+    --mean          Return mean WPS for each region.
+    --all           Calculate WPS for fragments of any length.
+    --short         Calculate S-WPS (35-80 bp).
+    --long          Calculate L-WPS (120-180 bp).
+    -o, --out       Output file name in WIG format (default: "OFF").
+
+Example:
+    python WPS_region.py -b test.bam -r test.bed -w 120 --wpsstep 10 --mean --all -o test.wps
+
+Notes:
+    - The script delivers output as a tab-separated values (TSV) file.
+    - For enhanced performance, it processes each chromosome in parallel.
+
+Citation:
+    For publication, please cite:
+    https://github.com/ChaorongC/TWIST
+    Chen et al. (2025) [MANUSCRIPT_TITLE].
 """
 
 import sys, os
