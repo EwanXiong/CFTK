@@ -52,8 +52,8 @@ parser.add_option(
     "-@",
     "--core",
     dest="core",
-    help="The core number used for parallel computing (default 1)",
-    default=1,
+    help="The core number used for parallel computing (default -1)",
+    default=-1,
     type="int",
 )
 
