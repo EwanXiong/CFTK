@@ -72,7 +72,7 @@ def wilcoxon(X, y):
     Returns:
         p-values of Wilcoxon rank-sum test for each feature
     """
-    return -mannwhitneyu(X[y == 0], X[y == 1])[1]
+    return mannwhitneyu(X[y == 0], X[y == 1])[1]
 
 
 def modality_performance(
