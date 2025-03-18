@@ -143,7 +143,7 @@ for chrom in regions_all_chrom:
     matrix_chrom = matrix.iloc[np.where(matrix_index["chr"] == chrom)]
     matrix_index_chrom = matrix_index.iloc[np.where(matrix_index["chr"] == chrom)]
     regions_chrom = regions.loc[regions["chrom"] == chrom]
-    average_result_chrom = Parallel(n_jobs=options.core, verbose=10, backend="multiprocessing")(
+    average_result_chrom = Parallel(n_jobs=options.core, verbose=1, backend="multiprocessing")(
         delayed(calculation_func)(region[0], region[1])
         for idx, region in regions_chrom[["chromStart", "chromEnd"]].iterrows()
     )
