@@ -22,7 +22,7 @@ np.int = np.int64
 steps = {
     1: "trimming(trim_galore)",
     2: "alignment and sorting(bwameth and Samtools)",
-    3: "mark duplicates(Picard)",
+    3: "mark duplicates(sambamba/samblaster/Picard)",
     4: "methylation ratio calling(MethylDackel)",
     5: "nucleosome occupancy calculation(DANPOS3)",
     6: "window protection score calculation",
@@ -257,13 +257,13 @@ def process(args):
     # Mark duplicates
     if 3 in args.step:
         disp("Start: %s" % steps[3])
-        output_dir = args.picard_output_dir
-        if os.path.exists(args.picard_output_dir):
-            disp("Outputting to: %s" % args.picard_output_dir)
+        output_dir = args.markdup_output_dir
+        if os.path.exists(args.markdup_output_dir):
+            disp("Outputting to: %s" % args.markdup_output_dir)
         else:
-            disp("%s doesn't exist. Creating it for you." % args.picard_output_dir)
+            disp("%s doesn't exist. Creating it for you." % args.markdup_output_dir)
             try:
-                os.mkdir(args.picard_output_dir)
+                os.mkdir(args.markdup_output_dir)
             except:
                 disp("Failed to create directory.")
         disp("Output:\n")
@@ -278,17 +278,35 @@ def process(args):
             print(message, file=sys.stderr)
             print(args.infile, file=sys.stderr)
             bam_input = args.infile[0]
-        if args.picard_args:
-            command = (
-                "%s MarkDuplicates I=%s O=%s/%s.markdup.bam R=%s M=%s/%s.markdup_raw_metrics \
-                SORTING_COLLECTION_SIZE_RATIO=0.15 ASSUME_SORT_ORDER=coordinate \
-                OPTICAL_DUPLICATE_PIXEL_DISTANCE=2500 MAX_RECORDS_IN_RAM=1000 %s || exit 1;"
-                % (
-                    args.picard_jar_path,
-                    bam_input,
-                    args.picard_output_dir,
-                    args.prefix,
-                    args.ref,
+        if args.markdup_args:
+            if args.markdup_tool == "sambamba":
+                command = (
+                    "sambamba markdup -t %s %s %s/%s.markdup.bam || exit 1;"
+                    % (args.cores, args.markdup_args, bam_input, args.markdup_output_dir, args.prefix)
+                )
+            elif args.markdup_tool == "samblaster":# need fix
+                command = (
+                    "samblaster %s --addMateTags --splitFile %s/%s.markdup.split.bam --outputFile %s/%s.markdup.bam < %s || exit 1;"
+                    % (
+                        args.markdup_args,
+                        args.markdup_output_dir,
+                        args.prefix,
+                        args.markdup_output_dir,
+                        args.prefix,
+                        bam_input, 
+                    )
+                )
+            elif args.markdup_tool == "picard":
+                command = (
+                    "%s MarkDuplicates I=%s O=%s/%s.markdup.bam R=%s M=%s/%s.markdup_raw_metrics \
+                    SORTING_COLLECTION_SIZE_RATIO=0.15 ASSUME_SORT_ORDER=coordinate \
+                    OPTICAL_DUPLICATE_PIXEL_DISTANCE=2500 MAX_RECORDS_IN_RAM=1000 %s || exit 1;"
+                    % (
+                        args.picard_jar_path,
+                        bam_input,
+                        args.picard_output_dir,
+                        args.prefix,
+                        args.ref,
                     args.picard_output_dir,
                     args.prefix,
                     args.picard_args,
@@ -297,22 +315,39 @@ def process(args):
                 % (args.cores, args.picard_output_dir, args.prefix)
             )
         else:
-            command = (
-                "%s MarkDuplicates I=%s O=%s/%s.markdup.bam R=%s M=%s/%s.markdup_raw_metrics \
-                SORTING_COLLECTION_SIZE_RATIO=0.15 ASSUME_SORT_ORDER=coordinate \
-                OPTICAL_DUPLICATE_PIXEL_DISTANCE=2500 MAX_RECORDS_IN_RAM=1000 || exit 1;"
-                % (
-                    args.picard_jar_path,
-                    bam_input,
-                    args.picard_output_dir,
-                    args.prefix,
-                    args.ref,
-                    args.picard_output_dir,
-                    args.prefix,
+            if args.markdup_tool == "sambamba":
+                command = (
+                    "sambamba markdup -t %s %s -o %s/%s.markdup.bam || exit 1;"
+                    % (args.cores, bam_input, args.markdup_output_dir, args.prefix)
                 )
-                + "samtools index -@ %s %s/%s.markdup.bam|| exit 1;"
-                % (args.cores, args.picard_output_dir, args.prefix)
-            )
+            elif args.markdup_tool == "samblaster":# need fix
+                command = (
+                    "samblaster --addMateTags --splitFile %s/%s.markdup.split.bam --outputFile %s/%s.markdup.bam < %s || exit 1;"
+                    % (
+                        args.markdup_output_dir,
+                        args.prefix,
+                        args.markdup_output_dir,
+                        args.prefix,
+                        bam_input,
+                    )
+                )
+            elif args.markdup_tool == "picard":
+                command = (
+                    "%s MarkDuplicates I=%s O=%s/%s.markdup.bam R=%s M=%s/%s.markdup_raw_metrics \
+                    SORTING_COLLECTION_SIZE_RATIO=0.15 ASSUME_SORT_ORDER=coordinate \
+                    OPTICAL_DUPLICATE_PIXEL_DISTANCE=2500 MAX_RECORDS_IN_RAM=1000 || exit 1;"
+                    % (
+                        args.picard_jar_path,
+                        bam_input,
+                        args.picard_output_dir,
+                        args.prefix,
+                        args.ref,
+                        args.picard_output_dir,
+                        args.prefix,
+                    )
+                    + "samtools index -@ %s %s/%s.markdup.bam|| exit 1;"
+                    % (args.cores, args.picard_output_dir, args.prefix)
+                )
         disp("Running:\n %s\n" % command)
         os.system(command)
         disp("Complete: %s" % steps[3])

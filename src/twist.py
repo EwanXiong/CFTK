@@ -131,19 +131,27 @@ process_parser.add_argument(
 )
 
 process_parser.add_argument(
-    "--picard-args",
-    dest="picard_args",
+    "--markdup-tool",
+    dest="markdup_tool",
+    type=str,
+    help="",
+    default='sambamba',
+)
+
+process_parser.add_argument(
+    "--markdup-args",
+    dest="markdup_args",
     type=str,
     help="",
     default=None,
 )
 
 process_parser.add_argument(
-    "--picard-output-dir",
-    dest="picard_output_dir",
+    "--markdup-output-dir",
+    dest="markdup_output_dir",
     type=str,
     help="",
-    default=os.getcwd() + "/picard_output",
+    default=os.getcwd() + "/markdup_output",
 )
 
 process_parser.add_argument(

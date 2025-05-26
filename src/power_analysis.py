@@ -327,25 +327,23 @@ def pwd_by_sample(
     temp.index = sample_size_to_inspect
     return temp
 
+
 # By mode
 if args.mode == 1:
     assert (
-        args.sample_size is not None
-        and args.meth_diff is not None
+        args.sample_size is not None and args.meth_diff is not None
     ), "For mode 1, --sample-size and --meth-diff must be specified."
     sys.exit(1)
 
 if args.mode == 2:
-    assert ( 
-        args.sample_size is not None
-        and args.diff_range is not None
+    assert (
+        args.sample_size is not None and args.diff_range is not None
     ), "For mode 2, --sample-size and --diff-range must be specified."
     sys.exit(1)
 
 if args.mode == 3:
     assert (
-        args.meth_diff is not None
-        and args.sample_range is not None
+        args.meth_diff is not None and args.sample_range is not None
     ), "For mode 3, --meth-diff and --sample-range must be specified."
     sys.exit(1)
 
@@ -450,10 +448,9 @@ if args.sample_size is not None and args.diff_range is not None:
             f"{args.output_dir}/m2_power_analysis_by_diff_{args.sample_size}smp.png",
             bbox_inches="tight",
             dpi=500,
-        )  
-    
-    
-    
+        )
+
+
 if args.meth_diff is not None and args.sample_range is not None:
     pwr_result_by_sample = pwd_by_sample(
         meth_diff=args.meth_diff,
@@ -504,10 +501,4 @@ if args.meth_diff is not None and args.sample_range is not None:
             f"{args.output_dir}/m3_power_analysis_by_sample_{args.meth_diff}diff.png",
             bbox_inches="tight",
             dpi=500,
-        )  
-
-
-
-
-
-
+        )
