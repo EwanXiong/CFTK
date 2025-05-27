@@ -299,7 +299,7 @@ def execute_mark_duplicates(args) -> None:
     if tool == "sambamba":
         cmd = (
             f"sambamba markdup -t {args.cores} {extra_args} "
-            f"{bam_input} {args.markdup_output_dir}/{args.prefix}.markdup.bam || exit 1"
+            f"{bam_input} {args.markdup_output_dir}/{args.prefix}.markdup.bam || exit 1;"
         )
 
     elif tool == "samblaster":
@@ -307,7 +307,7 @@ def execute_mark_duplicates(args) -> None:
             f"samblaster {extra_args} --addMateTags "
             f"--splitFile {args.markdup_output_dir}/{args.prefix}.markdup.split.bam "
             f"--outputFile {args.markdup_output_dir}/{args.prefix}.markdup.bam "
-            f"< {bam_input} || exit 1"
+            f"< {bam_input} || exit 1;"
         )
 
     elif tool == "picard":
