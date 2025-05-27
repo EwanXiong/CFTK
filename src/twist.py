@@ -144,7 +144,7 @@ process_parser.add_argument(
     dest="markdup_args",
     type=str,
     help="",
-    default=None,
+    default="",
 )
 
 process_parser.add_argument(
