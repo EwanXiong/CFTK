@@ -301,15 +301,6 @@ def execute_mark_duplicates(args) -> None:
             f"sambamba markdup -t {args.cores} {extra_args} "
             f"{bam_input} {args.markdup_output_dir}/{args.prefix}.markdup.bam || exit 1;"
         )
-
-    elif tool == "samblaster":
-        cmd = (
-            f"samblaster {extra_args} --addMateTags "
-            f"--splitFile {args.markdup_output_dir}/{args.prefix}.markdup.split.bam "
-            f"--outputFile {args.markdup_output_dir}/{args.prefix}.markdup.bam "
-            f"< {bam_input} || exit 1;"
-        )
-
     elif tool == "picard":
         jar_path = getattr(args, "picard_jar_path", "picard")
         cmd = (
