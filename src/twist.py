@@ -2,6 +2,7 @@
 
 import argparse, time, sys, os
 import util
+import process
 
 parser = argparse.ArgumentParser(description="TWIST methylome processing package")
 subparsers = parser.add_subparsers(dest="mode", help="processing mode")
@@ -500,7 +501,9 @@ if args.mode == "init":
 
 if args.mode == "process":
     util.disp("Processing.")
-    util.process(args)
+    #util.process(args)
+    process.process(args)
+    
 
 if args.mode == "merge":
     util.disp("Merging.")
