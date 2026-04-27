@@ -42,15 +42,13 @@ mpl.rcParams.update({
     "figure.dpi":      150,
 })
 
-# Multimodal always drawn first and in a distinct color
-MULTIMODAL_COLOR = "#cc0000"   # red
+MULTIMODAL_COLOR = "#cc0000"
 
-# Default palette for single modalities (cycles if more than 8)
 MODALITY_COLORS = [
-    "#9b59b6",   # purple   — Methylation
-    "#3498db",   # blue     — Occupancy
-    "#2ecc71",   # green    — Fuzziness
-    "#e67e22",   # orange   — WPS
+    "#9b59b6",   # purple
+    "#3498db",   # blue
+    "#2ecc71",   # green
+    "#e67e22",   # orange
     "#1abc9c",   # teal
     "#e74c3c",   # red2
     "#34495e",   # dark grey
@@ -59,11 +57,6 @@ MODALITY_COLORS = [
 
 
 def _build_color_map(modality_names):
-    """
-    Assign a color to each modality.
-    'Multimodal' always gets MULTIMODAL_COLOR.
-    Others get colors from MODALITY_COLORS in order.
-    """
     color_map = {}
     mod_idx = 0
     for name in modality_names:
@@ -75,55 +68,78 @@ def _build_color_map(modality_names):
     return color_map
 
 
+def _infer_group_names(y_true, sample_index):
+    """
+    Infer group names from sample IDs (index of pred_df).
+
+    Samples are assumed to be named <GroupName>_<number>, e.g. "Control_1",
+    "sALS_3". The prefix before the last underscore+digit is the group name.
+    y_true=1 → group with the higher numeric label (positive class).
+    y_true=0 → the other group.
+
+    Falls back to ("Group1", "Group0") if names cannot be determined.
+
+    Returns
+    -------
+    label1 : str  name for y_true == 1  (positive class, drawn first)
+    label0 : str  name for y_true == 0  (negative class)
+    """
+    import re
+    names_1 = set()
+    names_0 = set()
+    for sid, label in zip(sample_index, y_true):
+        # Extract prefix: everything before trailing _<digits>
+        match = re.match(r'^(.+?)(?:_\d+)?$', str(sid))
+        prefix = match.group(1) if match else str(sid)
+        if label == 1:
+            names_1.add(prefix)
+        else:
+            names_0.add(prefix)
+
+    label1 = ", ".join(sorted(names_1)) if names_1 else "Group1"
+    label0 = ", ".join(sorted(names_0)) if names_0 else "Group0"
+    return label1, label0
+
+
 # ══════════════════════════════════════════════════════════════════════════════
 # Figure A: ROC curves
 # ══════════════════════════════════════════════════════════════════════════════
 
 def _plot_roc(ax, pred_df, modality_names, color_map, title="LOOCV"):
     """
-    Draw ROC curves for all modalities on a single axes.
-
-    Multimodal is drawn last (on top), others in input order.
-    AUC values are shown in the legend, sorted descending.
-
-    Parameters
-    ----------
-    ax            : matplotlib Axes
-    pred_df       : DataFrame with y_true and one column per modality
-    modality_names: list of str, column names to plot (excluding y_true)
-    color_map     : dict {name: color}
-    title         : str, axes title
+    ROC curves with full 4-sided box frame and slight x-axis left margin.
     """
     y_true = pred_df["y_true"].values
 
-    # Compute AUC for all, then sort descending for legend order
     auc_dict = {}
     for name in modality_names:
         auc_dict[name] = roc_auc_score(y_true, pred_df[name].values)
 
-    # Draw in AUC-ascending order so highest AUC is on top visually
     draw_order = sorted(modality_names, key=lambda n: auc_dict[n])
 
     for name in draw_order:
         fpr, tpr, _ = roc_curve(y_true, pred_df[name].values)
-        auc          = auc_dict[name]
-        lw           = 1.8 if name == "Multimodal" else 1.2
-        label        = f"{auc:.4f} ({name})"
+        auc  = auc_dict[name]
+        lw   = 1.8 if name == "Multimodal" else 1.2
+        label = f"{auc:.4f} ({name})"
         ax.plot(fpr, tpr, color=color_map[name], linewidth=lw, label=label)
 
-    # Reference diagonal
     ax.plot([0, 1], [0, 1], color="grey", linewidth=0.5,
             linestyle="--", alpha=0.6)
 
-    ax.set_xlim(0, 1)
+    # Leave a small margin on the left so the y-axis line is visible
+    ax.set_xlim(-0.02, 1.0)
     ax.set_ylim(0, 1)
     ax.set_xlabel("False positive rate")
     ax.set_ylabel("True positive rate")
     ax.set_title(title)
 
-    # Legend: highest AUC first, placed inside upper-left area
+    # Full 4-sided box frame
+    for spine in ax.spines.values():
+        spine.set_visible(True)
+        spine.set_linewidth(0.8)
+
     handles, labels = ax.get_legend_handles_labels()
-    # reverse so highest AUC appears at top of legend
     ax.legend(
         handles[::-1], labels[::-1],
         title="AUC",
@@ -133,7 +149,6 @@ def _plot_roc(ax, pred_df, modality_names, color_map, title="LOOCV"):
         fontsize=6,
         title_fontsize=6,
     )
-    sns.despine(ax=ax)
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -143,33 +158,27 @@ def _plot_roc(ax, pred_df, modality_names, color_map, title="LOOCV"):
 def _plot_prob_heatmap(fig, gs_row, pred_df, modality_names,
                        color_map, title="LOOCV"):
     """
-    Draw a probability heatmap using a GridSpec sub-layout.
+    Probability heatmap.
 
-    Layout (top to bottom):
-      - Condition bar  (Cancer=dark red, Non-Cancer=light grey)
-      - One heatmap row per modality (predicted probability, 0–1)
-
-    Samples are sorted: Cancer first (left), Non-Cancer second (right).
-
-    Parameters
-    ----------
-    fig           : matplotlib Figure
-    gs_row        : GridSpec row object (one row of the outer grid)
-    pred_df       : DataFrame
-    modality_names: list of str (single modalities only, no Multimodal)
-    color_map     : dict
-    title         : str
+    - Group names inferred from sample IDs (not hardcoded as Cancer/Non-Cancer).
+    - Condition legend placed outside the heatmap area to the right of the figure.
+    - Probability colorbar placed outside to the right, below the condition legend.
+    - Samples sorted: positive class (y_true=1) first (left).
     """
-    y_true = pred_df["y_true"].values
+    y_true       = pred_df["y_true"].values
+    sample_index = pred_df.index
 
-    # Sort samples: Cancer (1) first, then Non-Cancer (0)
-    sort_idx    = np.argsort(-y_true)   # descending sort (1s first)
-    y_sorted    = y_true[sort_idx]
-    n_cancer    = int(y_sorted.sum())
-    n_total     = len(y_sorted)
+    # Infer actual group names from sample IDs
+    label1, label0 = _infer_group_names(y_true, sample_index)
 
-    # Build sub-gridspec: 1 condition row + len(modality_names) heatmap rows
-    n_rows    = 1 + len(modality_names)
+    # Sort samples: positive class first
+    sort_idx = np.argsort(-y_true)
+    y_sorted = y_true[sort_idx]
+    n_pos    = int(y_sorted.sum())
+    n_total  = len(y_sorted)
+
+    # Sub-gridspec: 1 condition row + N heatmap rows
+    n_rows     = 1 + len(modality_names)
     row_ratios = [0.25] + [1.0] * len(modality_names)
     inner_gs   = gridspec.GridSpecFromSubplotSpec(
         n_rows, 1,
@@ -180,7 +189,10 @@ def _plot_prob_heatmap(fig, gs_row, pred_df, modality_names,
 
     # ── Condition bar ─────────────────────────────────────────────────────────
     ax_cond = fig.add_subplot(inner_gs[0])
-    cond_colors = ["#8b1a1a"] * n_cancer + ["#d3d3d3"] * (n_total - n_cancer)
+    # Positive class = dark red, negative = light grey
+    POS_COLOR = "#8b1a1a"
+    NEG_COLOR = "#d3d3d3"
+    cond_colors = [POS_COLOR] * n_pos + [NEG_COLOR] * (n_total - n_pos)
     ax_cond.bar(
         np.arange(n_total), [1] * n_total,
         color=cond_colors, width=1.0, align="edge",
@@ -193,30 +205,22 @@ def _plot_prob_heatmap(fig, gs_row, pred_df, modality_names,
                         labelpad=40, va="center")
     ax_cond.set_title(title, fontsize=8, pad=4)
 
-    # Condition legend (right side of condition bar)
-    legend_patches = [
-        Patch(facecolor="#8b1a1a", label="Cancer"),
-        Patch(facecolor="#d3d3d3", label="Non-Cancer"),
+    # Condition legend: placed to the right of the figure using fig.legend
+    # (stored as patches; added to fig after all axes are created)
+    condition_patches = [
+        Patch(facecolor=POS_COLOR, edgecolor="none", label=label1),
+        Patch(facecolor=NEG_COLOR, edgecolor="none", label=label0),
     ]
-    ax_cond.legend(
-        handles=legend_patches,
-        loc="upper right",
-        bbox_to_anchor=(1.15, 1.0),
-        frameon=False,
-        fontsize=5,
-    )
 
-    # ── One heatmap row per modality ──────────────────────────────────────────
+    # ── Heatmap rows ──────────────────────────────────────────────────────────
+    last_im = None
     for row_i, name in enumerate(modality_names):
         ax_hm = fig.add_subplot(inner_gs[row_i + 1])
-
-        # Sort predictions by the same sample order as the condition bar
         probs_sorted = pred_df[name].values[sort_idx].reshape(1, -1)
-
-        im = ax_hm.imshow(
+        last_im = ax_hm.imshow(
             probs_sorted,
             aspect="auto",
-            cmap="RdBu_r",          # Red=high probability, Blue=low
+            cmap="RdBu_r",
             vmin=0, vmax=1,
             interpolation="nearest",
         )
@@ -224,16 +228,7 @@ def _plot_prob_heatmap(fig, gs_row, pred_df, modality_names,
         ax_hm.set_yticklabels([name], fontsize=5)
         ax_hm.set_xticks([])
 
-        # Colorbar only on the last row
-        if row_i == len(modality_names) - 1:
-            cbar = fig.colorbar(
-                im, ax=ax_hm,
-                orientation="vertical",
-                fraction=0.02, pad=0.01,
-                ticks=[0, 0.2, 0.4, 0.6, 0.8, 1.0],
-            )
-            cbar.ax.tick_params(labelsize=5)
-            cbar.set_label("Probability", fontsize=5)
+    return condition_patches, last_im
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -241,23 +236,7 @@ def _plot_prob_heatmap(fig, gs_row, pred_df, modality_names,
 # ══════════════════════════════════════════════════════════════════════════════
 
 def _plot_spearman(ax, pred_df, modality_names, title="LOOCV"):
-    """
-    Draw a lower-triangular Spearman correlation heatmap.
-
-    Correlation values are computed between LOOCV predicted probabilities
-    of each modality pair, then displayed in the lower triangle.
-    Diagonal = 1.
-
-    Parameters
-    ----------
-    ax            : matplotlib Axes
-    pred_df       : DataFrame
-    modality_names: list of str (single modalities only, no Multimodal)
-    title         : str
-    """
     n = len(modality_names)
-
-    # Compute pairwise Spearman correlations
     corr_matrix = np.eye(n)
     for i in range(n):
         for j in range(i):
@@ -266,12 +245,10 @@ def _plot_spearman(ax, pred_df, modality_names, title="LOOCV"):
                 pred_df[modality_names[j]].values,
             )
             corr_matrix[i, j] = r
-            corr_matrix[j, i] = r   # symmetric (needed for masking)
+            corr_matrix[j, i] = r
 
-    # Mask the upper triangle (show lower triangle + diagonal only)
     mask = np.triu(np.ones((n, n), dtype=bool), k=1)
 
-    # Draw heatmap using seaborn (handles annotation and color scale)
     sns.heatmap(
         corr_matrix,
         ax=ax,
@@ -292,8 +269,6 @@ def _plot_spearman(ax, pred_df, modality_names, title="LOOCV"):
     ax.set_title(title, pad=6)
     ax.tick_params(axis="x", labelrotation=30)
     ax.tick_params(axis="y", labelrotation=0)
-
-    # Add "Spearman correlation" label below x-axis (matching reference figure)
     ax.set_xlabel("Spearman correlation", fontsize=6, labelpad=4)
 
 
@@ -313,12 +288,10 @@ def plot_mesa_loocv(
     Parameters
     ----------
     pred_df      : pd.DataFrame
-                   Output of run_mesa_loocv(), or loaded from
-                   loocv_predictions.tsv (index_col=0).
                    Must have columns: y_true, <modality names>, Multimodal.
+                   index = sample IDs (used to infer group names).
     output_dir   : str, directory where figures are saved.
     cohort_label : str, label shown in each figure title.
-                   e.g. "LOOCV on Cohort 1"
     dpi          : int, output resolution (default 300).
 
     Output files
@@ -329,17 +302,11 @@ def plot_mesa_loocv(
     """
     os.makedirs(output_dir, exist_ok=True)
 
-    # Separate modality columns from y_true
-    all_cols       = [c for c in pred_df.columns if c != "y_true"]
-    # Single modalities: everything except Multimodal
-    single_modal   = [c for c in all_cols if c != "Multimodal"]
-    # All modalities for ROC (Multimodal drawn last/on top)
-    roc_order      = single_modal + (["Multimodal"] if "Multimodal" in all_cols else [])
-
-    color_map = _build_color_map(roc_order)
-
-    # Sanitize cohort label for use in filenames
-    label_slug = cohort_label.replace(" ", "_").replace("/", "-")
+    all_cols     = [c for c in pred_df.columns if c != "y_true"]
+    single_modal = [c for c in all_cols if c != "Multimodal"]
+    roc_order    = single_modal + (["Multimodal"] if "Multimodal" in all_cols else [])
+    color_map    = _build_color_map(roc_order)
+    label_slug   = cohort_label.replace(" ", "_").replace("/", "-")
 
     # ── Figure A: ROC curves ─────────────────────────────────────────────────
     fig_roc, ax_roc = plt.subplots(figsize=(3.5, 3.5))
@@ -357,28 +324,69 @@ def plot_mesa_loocv(
     plt.close(fig_roc)
 
     # ── Figure B: Probability heatmap ────────────────────────────────────────
-    # Height: condition bar (0.3) + one row per single modality (0.5 each)
     heatmap_height = 0.4 + len(single_modal) * 0.55
-    fig_hm = plt.figure(figsize=(8, max(heatmap_height, 2.0)))
-    gs_hm  = gridspec.GridSpec(1, 1, figure=fig_hm)
-    _plot_prob_heatmap(
+    # Extra right margin for the external legends (condition + colorbar)
+    fig_hm = plt.figure(figsize=(9, max(heatmap_height, 2.0)))
+
+    # Reserve right portion for legends: heatmap takes left 88%, legends right 12%
+    gs_outer = gridspec.GridSpec(
+        1, 2,
+        figure=fig_hm,
+        width_ratios=[0.88, 0.12],
+        wspace=0.02,
+    )
+
+    condition_patches, last_im = _plot_prob_heatmap(
         fig=fig_hm,
-        gs_row=gs_hm[0],
+        gs_row=gs_outer[0],
         pred_df=pred_df,
         modality_names=single_modal,
         color_map=color_map,
         title=cohort_label,
     )
-    fig_hm.tight_layout()
+
+    # Right panel: condition legend (top) + probability colorbar (below)
+    ax_legend = fig_hm.add_subplot(gs_outer[1])
+    ax_legend.axis("off")
+
+    # Condition legend at the top of the right panel
+    ax_legend.legend(
+        handles=condition_patches,
+        loc="upper left",
+        bbox_to_anchor=(0.0, 1.0),
+        frameon=True,
+        framealpha=0.0,
+        edgecolor="none",
+        fontsize=6,
+        title="Conditions",
+        title_fontsize=6,
+        labelspacing=0.4,
+        handlelength=1.0,
+        handleheight=1.0,
+    )
+
+    # Probability colorbar below the condition legend
+    # Use a small inset axes inside the right panel for the colorbar
+    cbar_ax = fig_hm.add_axes([
+        ax_legend.get_position().x0 + 0.01,   # x start
+        ax_legend.get_position().y0 + 0.05,   # y start
+        0.018,                                  # width
+        ax_legend.get_position().height * 0.55, # height (55% of right panel)
+    ])
+    cbar = fig_hm.colorbar(last_im, cax=cbar_ax,
+                            ticks=[0, 0.2, 0.4, 0.6, 0.8, 1.0])
+    cbar.ax.tick_params(labelsize=5)
+    cbar.set_label("Probability", fontsize=5, labelpad=3)
+
     hm_path = os.path.join(output_dir, f"mesa_heatmap_{label_slug}.pdf")
     fig_hm.savefig(hm_path, dpi=dpi, bbox_inches="tight")
     print(f"[saved] {hm_path}")
     plt.close(fig_hm)
 
     # ── Figure C: Spearman correlation heatmap ───────────────────────────────
-    n_modal     = len(single_modal)
-    cell_size   = 1.2   # inches per cell
-    fig_size    = max(n_modal * cell_size, 3.0)
+    n_modal   = len(single_modal)
+    cell_size = 1.2
+    fig_size  = max(n_modal * cell_size, 3.0)
     fig_sp, ax_sp = plt.subplots(figsize=(fig_size, fig_size))
     _plot_spearman(
         ax=ax_sp,
@@ -393,3 +401,54 @@ def plot_mesa_loocv(
     plt.close(fig_sp)
 
     print(f"\n[mesa_cv_plot] All figures saved to: {output_dir}")
+
+
+if __name__ == "__main__":
+    import argparse
+ 
+    parser = argparse.ArgumentParser(
+        description="Generate MESA LOOCV visualizations from loocv_predictions.tsv.",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog=(
+            "Example:\n"
+            "  python mesa_cv_plot.py \\\n"
+            "      --input  output/loocv_predictions.tsv \\\n"
+            "      --output output/ \\\n"
+            "      --cohort 'LOOCV on Cohort 1'"
+        ),
+    )
+    parser.add_argument(
+        "--input", "-i", required=True,
+        help="Path to loocv_predictions.tsv (output of mesa_loocv.py).",
+    )
+    parser.add_argument(
+        "--output", "-o", required=True,
+        help="Output directory for PDF figures.",
+    )
+    parser.add_argument(
+        "--cohort", default="LOOCV",
+        help="Cohort label shown in figure titles. Default: 'LOOCV'.",
+    )
+    parser.add_argument(
+        "--dpi", type=int, default=300,
+        help="Output resolution. Default: 300.",
+    )
+ 
+    cli = parser.parse_args()
+ 
+    if not os.path.exists(cli.input):
+        import sys
+        sys.exit(f"ERROR: input file not found: {cli.input}")
+ 
+    print(f"[mesa_cv_plot] Loading: {cli.input}")
+    pred_df = pd.read_csv(cli.input, sep="\t", index_col=0)
+    print(f"[mesa_cv_plot] Shape: {pred_df.shape}  "
+          f"Columns: {pred_df.columns.tolist()}")
+ 
+    plot_mesa_loocv(
+        pred_df,
+        output_dir   = cli.output,
+        cohort_label = cli.cohort,
+        dpi          = cli.dpi,
+    )
+ 
