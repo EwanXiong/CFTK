@@ -12,15 +12,295 @@ import os
 import re
 
 
-def _b64(png_path):
-    with open(png_path, "rb") as f:
-        return "data:image/png;base64," + base64.b64encode(f.read()).decode()
+def _b64(png_path, max_width=2400, jpeg_quality=95):
+    """
+    Convert image to JPEG (quality=88) and base64-encode.
+    JPEG at quality 88 is visually near-lossless but ~70% smaller than PNG.
+    Downscales to max_width if image is wider.
+    Falls back to raw PNG if PIL unavailable.
+    """
+    try:
+        from PIL import Image
+        import io
+        img = Image.open(png_path)
+        # convert to RGB (JPEG does not support alpha)
+        if img.mode in ("RGBA", "P", "LA"):
+            bg = Image.new("RGB", img.size, (255, 255, 255))
+            if img.mode == "P":
+                img = img.convert("RGBA")
+            alpha = img.split()[-1] if img.mode in ("RGBA", "LA") else None
+            bg.paste(img, mask=alpha)
+            img = bg
+        elif img.mode != "RGB":
+            img = img.convert("RGB")
+        # downscale if wider than max_width
+        if img.width > max_width:
+            ratio = max_width / img.width
+            img   = img.resize((max_width, int(img.height * ratio)), Image.LANCZOS)
+        buf = io.BytesIO()
+        img.save(buf, format="JPEG", quality=jpeg_quality, optimize=True)
+        data = base64.b64encode(buf.getvalue()).decode()
+        return "data:image/jpeg;base64," + data
+    except Exception:
+        with open(png_path, "rb") as f:
+            return "data:image/png;base64," + base64.b64encode(f.read()).decode()
 
 
-def _img_tag(png_path, alt="", style="width:100%;"):
+def _img_tag(png_path, alt="", style="width:100%;", zoomable=True):
     if not png_path or not os.path.exists(png_path) or os.path.isdir(png_path):
         return f'<div class="fig-placeholder"><span class="hint">{alt} (not found)</span></div>'
-    return f'<img src="{_b64(png_path)}" alt="{alt}" style="{style}">'
+    src = _b64(png_path)
+    img = f'<img src="{src}" alt="{alt}" style="{style}"'
+    if zoomable:
+        img += f' onclick="openLightbox(this.src)" title="Click to zoom"'
+    img += '>'
+    return img
+
+
+def _b64_svg(svg_path):
+    """Embed SVG as base64 data URI."""
+    if not svg_path or not os.path.exists(svg_path):
+        return ""
+    with open(svg_path, "rb") as f:
+        return "data:image/svg+xml;base64," + base64.b64encode(f.read()).decode()
+
+
+def _img_tag_svg(svg_path, alt=""):
+    """Render SVG as inline <img> with zoom support."""
+    if not svg_path or not os.path.exists(svg_path):
+        return f'<div class="fig-placeholder"><span class="hint">{alt} (not found)</span></div>'
+    src = _b64_svg(svg_path)
+    return (f'<img src="{src}" alt="{alt}" '
+            f'style="width:100%;max-height:320px;object-fit:contain;padding:8px;" '
+            f'onclick="openLightbox(this.src)" title="Click to zoom">')
+
+
+def _multiqc_png_gallery(multiqc_dir, uid_prefix):
+    """
+    Build a dropdown gallery from PNG files exported by MultiQC.
+    Scans multiqc_plots/png/ under multiqc_dir.
+    Converts raw filenames to readable labels:
+      cutadapt_filtered_reads_plot-cnt → Cutadapt Filtered Reads (Count)
+    """
+    png_dir = os.path.join(multiqc_dir, "multiqc_plots", "png")
+    PH = '<div class="fig-placeholder" style="height:80px;"><span class="hint">{}</span></div>'
+    if not os.path.exists(png_dir):
+        return PH.format("MultiQC PNG plots not found — re-run process with --export flag")
+
+    pngs = sorted(glob.glob(os.path.join(png_dir, "*.png")))
+    if not pngs:
+        return PH.format("No PNG plots found in multiqc_plots/png/")
+
+    def _label(fname):
+        """Convert filename to readable label."""
+        stem = os.path.splitext(os.path.basename(fname))[0]
+        # suffix mappings
+        stem = stem.replace("-cnt", " (Count)")
+        stem = stem.replace("-pct", " (Percent)")
+        stem = stem.replace("_plot_3_", " — ")
+        stem = stem.replace("_plot_", " — ")
+        stem = stem.replace("_", " ")
+        return stem.title()
+
+    images = [(_label(p), p) for p in pngs]
+    return _dropdown_gallery("Figure:", images,
+                             uid=re.sub(r'[^a-zA-Z0-9_]', '_', uid_prefix))
+
+
+
+
+def _mbias_from_groups(rd, groups):
+    """
+    Build M-bias SVG gallery per group.
+    File format: {sample_name}_OT.svg / {sample_name}_OB.svg
+    Each dropdown item shows OT and OB side by side in one row.
+    """
+    meth_dirs = [
+        os.path.join(rd, "1_process", "4_methylation"),
+        os.path.join(rd, "4_methylation"),
+    ]
+    meth_dir = next((d for d in meth_dirs if os.path.exists(d)), None)
+    if not meth_dir:
+        return "<p><em>No methylation results found.</em></p>"
+
+    # scan for *_OT.svg, derive OB path
+    ot_files = sorted(glob.glob(os.path.join(meth_dir, "*_OT.svg")))
+    if not ot_files:
+        return "<p><em>No M-bias SVG files found in 4_methylation/.</em></p>"
+
+    # map sample_name → (OT_path, OB_path)
+    sample_svgs = {}
+    for ot in ot_files:
+        stem = os.path.basename(ot).replace("_OT.svg", "")
+        ob   = ot.replace("_OT.svg", "_OB.svg")
+        sample_svgs[stem] = (ot, ob if os.path.exists(ob) else None)
+
+    html = ""
+    for grp, members in groups.items():
+        grp_items = []
+        for sname in members:
+            match = sample_svgs.get(sname)
+            if match:
+                grp_items.append((sname, match))
+        if not grp_items:
+            continue
+
+        onchange_js = (
+            "var idx=this.selectedIndex;"
+            "var panels=this.parentNode.parentNode.querySelectorAll('.dd-panel');"
+            "for(var i=0;i<panels.length;i++){"
+            "panels[i].style.display=(i===idx)?'block':'none';}"
+        )
+        opts = "".join(f'<option>{sname}</option>' for sname, _ in grp_items)
+
+        panels = ""
+        for i, (sname, (ot, ob)) in enumerate(grp_items):
+            ot_img = _img_tag_svg(ot, f"{sname} OT")
+            ob_img = _img_tag_svg(ob, f"{sname} OB") if ob else ""
+            # OT and OB side by side in one row
+            row = (
+                f'<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">'
+                f'  <div class="fig-card">'
+                f'    <div class="fig-img">{ot_img}</div>'
+                f'    <div class="fig-body"><div class="fig-label">OT strand</div></div>'
+                f'  </div>'
+                f'  <div class="fig-card">'
+                f'    <div class="fig-img">{ob_img if ob_img else _img_tag(None, "OB")}</div>'
+                f'    <div class="fig-body"><div class="fig-label">OB strand</div></div>'
+                f'  </div>'
+                f'</div>'
+            )
+            panels += (
+                f'<div class="dd-panel" style="display:{("block" if i == 0 else "none")};">'
+                f'{row}</div>'
+            )
+
+        html += (
+            f'<div style="margin-bottom:4px;font-size:12px;font-weight:500;'
+            f'color:var(--ink3);font-family:var(--mono)">{grp}</div>'
+            f'<div style="margin-bottom:24px;">'
+            f'<div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">'
+            f'<label style="font-size:12px;font-weight:500;color:var(--ink3);'
+            f'font-family:var(--mono);">Sample:</label>'
+            f'<select onchange="{onchange_js}" '
+            f'style="font-size:12px;padding:4px 10px;border:1px solid var(--rule);'
+            f'border-radius:4px;background:white;color:var(--ink2);cursor:pointer;">'
+            f'{opts}</select></div>'
+            f'{panels}</div>'
+        )
+    return html or "<p><em>No M-bias results found for configured samples.</em></p>"
+
+
+def _multiqc_named_galleries(multiqc_dir, gallery_groups, uid_prefix):
+    """
+    Build multiple independent dropdown galleries from MultiQC PNG exports.
+    gallery_groups: list of (gallery_title, [filename_stem_prefix, ...])
+      e.g. [("Filtered Reads", ["cutadapt_filtered_reads"]),
+             ("Trimmed Sequences", ["cutadapt_trimmed_sequences"])]
+    Files are matched by prefix; all PNGs in multiqc_plots/png/ not matched
+    by any group fall into the last group as fallback.
+    """
+    png_dir = os.path.join(multiqc_dir, "multiqc_plots", "png")
+    PH = ('<div class="fig-placeholder" style="height:80px;">'
+          '<span class="hint">MultiQC PNG not found — re-run with --export</span></div>')
+    if not os.path.exists(png_dir):
+        return PH
+
+    all_pngs = sorted(glob.glob(os.path.join(png_dir, "*.png")))
+    if not all_pngs:
+        return PH
+
+    def _label(fname):
+        stem = os.path.splitext(os.path.basename(fname))[0]
+        stem = stem.replace("-cnt", " (Count)")
+        stem = stem.replace("-pct", " (Percent)")
+        stem = stem.replace("_plot_3_", " — ")
+        stem = stem.replace("_plot_", " — ")
+        stem = stem.replace("_", " ")
+        return stem.strip().title()
+
+    # group pngs by prefix
+    grouped = {title: [] for title, _ in gallery_groups}
+    matched = set()
+    for title, prefixes in gallery_groups:
+        for png in all_pngs:
+            bname = os.path.basename(png)
+            if any(bname.startswith(p) for p in prefixes):
+                grouped[title].append((_label(png), png))
+                matched.add(png)
+
+    html = ""
+    for title, prefixes in gallery_groups:
+        images = grouped[title]
+        if not images:
+            continue
+        html += f'<div style="margin-bottom:20px;">'
+        html += (
+            f'<div style="font-size:12px;font-weight:500;color:var(--ink3);'
+            f'font-family:var(--mono);margin-bottom:8px;">{title}</div>'
+        )
+        html += _dropdown_gallery("Figure:", images,
+                                  uid=re.sub(r'[^a-zA-Z0-9_]', '_',
+                                             f"{uid_prefix}_{title}"))
+        html += "</div>"
+    return html or PH
+
+
+def _sec_sample_overview(groups):
+    """Render sample/group overview table with per-group row background color."""
+    COLORS = [
+        ("rgba(29,107,85,.10)",  "#1a6b55"),   # teal
+        ("rgba(192,90,44,.10)",  "#c05a2c"),   # coral
+        ("rgba(90,74,138,.10)",  "#5a4a8a"),   # purple
+        ("rgba(176,122,24,.10)", "#b07a18"),   # amber
+        ("rgba(30,95,160,.10)",  "#1e5fa0"),   # blue
+    ]
+    rows = ""
+    for gi, (grp, members) in enumerate(groups.items()):
+        row_bg, fg = COLORS[gi % len(COLORS)]
+        for i, sname in enumerate(members):
+            grp_cell = ""
+            if i == 0:
+                grp_cell = (
+                    f'<td rowspan="{len(members)}" '
+                    f'style="vertical-align:middle;border-top:1px solid var(--rule);'
+                    f'background:{row_bg};">'
+                    f'<span class="grp-badge" '
+                    f'style="background:{row_bg};color:{fg};'
+                    f'border:1px solid {fg}4d;">{grp}</span></td>'
+                )
+            rows += (
+                f'<tr>'
+                f'<td style="border-top:1px solid var(--rule);background:{row_bg};'
+                f'color:var(--ink2);">{i+1}</td>'
+                f'<td style="border-top:1px solid var(--rule);background:{row_bg};'
+                f'font-family:var(--mono);color:var(--ink);">{sname}</td>'
+                f'{grp_cell}'
+                f'</tr>'
+            )
+
+    n_total   = sum(len(v) for v in groups.values())
+    scrollable = "scrollable" if n_total > 5 else ""
+    return f"""
+    <section class="section" id="part_overview">
+      <div class="section-header">
+        <span class="section-num">OVERVIEW</span>
+        <h2 class="section-title">Sample Overview</h2>
+        <span class="section-tag">{n_total} samples · {len(groups)} groups</span>
+      </div>
+      <div class="sample-table-wrap {scrollable}">
+        <table class="sample-table">
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Sample</th>
+              <th>Group</th>
+            </tr>
+          </thead>
+          <tbody>{rows}</tbody>
+        </table>
+      </div>
+    </section>"""
 
 
 def _find(results_dir, *parts, pattern="*.png"):
@@ -43,40 +323,58 @@ def _uid(prefix=""):
 
 def _dropdown_gallery(title, images, uid=None):
     """
-    Render a dropdown selector + single image display.
-    images: list of (label, png_path)
+    Dropdown gallery. Uses onchange attribute with fully self-contained JS
+    expression — no external functions, no addEventListener, no DOMContentLoaded.
+    The onchange JS string iterates panel ids and sets display directly.
     """
     if not images:
         return f"<p><em>No {title} results found.</em></p>"
     uid = uid or _uid("dd_")
-    # sanitize uid for use as HTML id (no spaces or special chars)
     uid = re.sub(r'[^a-zA-Z0-9_]', '_', uid)
-    options = ""
-    imgs    = ""
-    for i, (label, path) in enumerate(images):
-        sel  = "selected" if i == 0 else ""
-        disp = "block"   if i == 0 else "none"
-        options += f'<option value="{uid}_{i}" {sel}>{label}</option>\n'
-        imgs    += (f'<div id="{uid}_{i}" class="fig-card dd-img" style="display:{disp}">'
-                    f'<div class="fig-img">'
-                    f'{_img_tag(path, label)}'
-                    f'</div>'
-                    f'<div class="fig-body"><div class="fig-label">{label}</div></div>'
-                    f'</div>\n')
+    n   = len(images)
 
-    return f"""
-<div class="dropdown-gallery" style="margin-bottom:20px;">
-  <div style="display:flex;align-items:center;gap:12px;margin-bottom:10px;">
-    <label style="font-size:12px;font-weight:500;color:var(--ink3);
-                  font-family:var(--mono);letter-spacing:.06em;">{title}</label>
-    <select onchange="showDD(this,'{uid}')"
-            style="font-size:12px;padding:4px 10px;border:1px solid var(--rule);
-                   border-radius:4px;background:white;color:var(--ink2);cursor:pointer;">
-      {options}
-    </select>
-  </div>
-  {imgs}
-</div>"""
+    # Build the onchange JS as a plain string (no f-string inside).
+    # It reads select.value and shows/hides panels by id.
+    # Written without any curly braces so it's safe inside f-strings.
+    js_parts = []
+    js_parts.append("var v=this.value;")
+    for i in range(n):
+        js_parts.append(
+            f"document.getElementById('{uid}_p{i}').style.display="
+            f"(v==='{i}')?'block':'none';"
+        )
+    onchange_js = "".join(js_parts)
+
+    # option tags
+    opts = "".join(
+        f'<option value="{i}">{label}</option>'
+        for i, (label, _) in enumerate(images)
+    )
+
+    # panel divs — Python controls initial display state
+    panels = ""
+    for i, (label, path) in enumerate(images):
+        disp = "block" if i == 0 else "none"
+        panels += (
+            f'<div id="{uid}_p{i}" style="display:{disp};">'
+            f'<div class="fig-card">'
+            f'<div class="fig-img">{_img_tag(path, label)}</div>'
+            f'<div class="fig-body"><div class="fig-label">{label}</div></div>'
+            f'</div></div>'
+        )
+
+    return (
+        f'<div style="margin-bottom:20px;">'
+        f'<div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">'
+        f'<label style="font-size:12px;font-weight:500;color:var(--ink3);'
+        f'font-family:var(--mono);">{title}</label>'
+        f'<select onchange="{onchange_js}"'
+        f' style="font-size:12px;padding:4px 10px;border:1px solid var(--rule);'
+        f'border-radius:4px;background:white;color:var(--ink2);cursor:pointer;">'
+        f'{opts}</select></div>'
+        f'{panels}'
+        f'</div>'
+    )
 
 
 def _read_perf_table(tsv_path):
@@ -146,23 +444,72 @@ def _sec_power(rd):
     </section>"""
 
 
-def _sec_process(rd):
-    return """
+def _sec_process(rd, groups=None):
+    groups = groups or {}
+
+    def _multiqc_html(*subdirs):
+        """Find multiqc_report.html, try multiple path patterns."""
+        candidates = [
+            os.path.join(rd, "1_process", *subdirs, "multiqc", "multiqc_report.html"),
+            os.path.join(rd, *subdirs, "multiqc", "multiqc_report.html"),
+        ]
+        for p in candidates:
+            if os.path.exists(p):
+                return p
+        return candidates[0]  # first candidate for placeholder
+
+    def _multiqc_dir(*subdirs):
+        """Locate the multiqc output directory."""
+        candidates = [
+            os.path.join(rd, "1_process", *subdirs, "multiqc"),
+            os.path.join(rd, *subdirs, "multiqc"),
+        ]
+        return next((d for d in candidates if os.path.exists(d)), candidates[0])
+
+    trim_gallery = _multiqc_named_galleries(
+        _multiqc_dir("1_trimming"),
+        [
+            ("Filtered Reads",    ["cutadapt_filtered_reads"]),
+            ("Trimmed Sequences", ["cutadapt_trimmed_sequences"]),
+        ],
+        uid_prefix="trim"
+    )
+    align_gallery = _multiqc_named_galleries(
+        _multiqc_dir("2_alignment"),
+        [
+            ("Alignment",          ["samtools_alignment"]),
+            ("Flagstat & Coverage", ["samtools-flagstat", "samtools-stats"]),
+        ],
+        uid_prefix="align"
+    )
+    mbias_block   = _mbias_from_groups(rd, groups)
+
+    return f"""
     <section class="section" id="part1">
       <div class="section-header">
         <span class="section-num">PART 01</span>
         <h2 class="section-title">Data Processing</h2>
         <span class="section-tag">process</span>
       </div>
-      <p style="font-size:13px;color:var(--ink2)">
+      <p style="font-size:13px;color:var(--ink2);margin-bottom:24px;">
         Raw sequencing data processed through adapter trimming (Trim Galore),
         bisulfite alignment (bwameth), duplicate removal (sambamba),
         and methylation calling (MethylDackel).
       </p>
+
+      <h3 class="subsec-title" id="part1_1">1.1 Trim Galore QC</h3>
+      {trim_gallery}
+
+      <h3 class="subsec-title" id="part1_2">1.2 bwameth Alignment QC</h3>
+      {align_gallery}
+
+      <h3 class="subsec-title" id="part1_3">1.3 M-bias</h3>
+      {mbias_block}
     </section>"""
 
 
-def _sec_qc(rd):
+def _sec_qc(rd, groups=None):
+    groups = groups or {}
     # 2.1 methylation distribution
     meth_img = _img_tag(
         _find(rd, "2_qc", "1_methylation_distribution", pattern="*.png"),
@@ -217,6 +564,7 @@ def _sec_qc(rd):
             fragment center. 10-bp periodicity reflects nucleosome positioning.</div>
         </div>
       </div>
+
     </section>"""
 
 
@@ -476,27 +824,31 @@ def _build_sidebar(rd, groups):
     return f"""
     <div class="nav-section">
       <div class="nav-label">Analysis</div>
-      <a href="#part0" class="nav-link"><span class="dot"></span>0 · Power</a>
-      <a href="#part1" class="nav-link"><span class="dot"></span>1 · Processing</a>
+      <a href="#part_overview" class="nav-link nav-top"><span class="dot"></span>Overview</a>
+      <a href="#part0" class="nav-link nav-top"><span class="dot"></span>0 · Power</a>
+      <a href="#part1" class="nav-link nav-top"><span class="dot"></span>1 · Processing</a>
+      <a href="#part1_1" class="nav-link nav-sub"><span class="dot"></span>1.1 · Trim Galore</a>
+      <a href="#part1_2" class="nav-link nav-sub"><span class="dot"></span>1.2 · Alignment</a>
+      <a href="#part1_3" class="nav-link nav-sub"><span class="dot"></span>1.3 · M-bias</a>
 
-      <a href="#part2" class="nav-link"><span class="dot"></span>2 · QC</a>
+      <a href="#part2" class="nav-link nav-top"><span class="dot"></span>2 · QC</a>
       <a href="#part2_1" class="nav-link nav-sub"><span class="dot"></span>2.1 · Methylation</a>
       <a href="#part2_2" class="nav-link nav-sub"><span class="dot"></span>2.2 · Fragment Length</a>
       <a href="#part2_3" class="nav-link nav-sub"><span class="dot"></span>2.3 · Dinucleotide</a>
 
-      <a href="#part3" class="nav-link"><span class="dot"></span>3 · Differential</a>
+      <a href="#part3" class="nav-link nav-top"><span class="dot"></span>3 · Differential</a>
       <a href="#part3_1" class="nav-link nav-sub"><span class="dot"></span>3.1 · PCA</a>
       <a href="#part3_2" class="nav-link nav-sub"><span class="dot"></span>3.2 · Violin</a>
       <a href="#part3_3" class="nav-link nav-sub"><span class="dot"></span>3.3 · Heatmap</a>
       <a href="#part3_4" class="nav-link nav-sub"><span class="dot"></span>3.4 · DMR</a>
 
-      <a href="#part4" class="nav-link"><span class="dot"></span>4 · Fragmentomics</a>
+      <a href="#part4" class="nav-link nav-top"><span class="dot"></span>4 · Fragmentomics</a>
       <a href="#part4_2" class="nav-link nav-sub"><span class="dot"></span>4.1 · DELFI</a>
       <a href="#part4_3" class="nav-link nav-sub"><span class="dot"></span>4.2 · End Motif</a>
       <a href="#part4_4" class="nav-link nav-sub"><span class="dot"></span>4.3 · Cleavage</a>
       <a href="#part4_5" class="nav-link nav-sub"><span class="dot"></span>4.4 · WPS</a>
 
-      <a href="#part5" class="nav-link"><span class="dot"></span>5 · MESA</a>
+      <a href="#part5" class="nav-link nav-top"><span class="dot"></span>5 · MESA</a>
       <a href="#part5_1" class="nav-link nav-sub"><span class="dot"></span>5.1 · Performance</a>
       <a href="#part5_2" class="nav-link nav-sub"><span class="dot"></span>5.2 · ROC</a>
       <a href="#part5_3" class="nav-link nav-sub"><span class="dot"></span>5.3 · Heatmap</a>
@@ -529,9 +881,10 @@ def generate_report(args):
 
     sidebar  = _build_sidebar(rd, groups)
     sections = (
-        _sec_power(rd)
-        + _sec_process(rd)
-        + _sec_qc(rd)
+        _sec_sample_overview(groups)
+        + _sec_power(rd)
+        + _sec_process(rd, groups=groups)
+        + _sec_qc(rd, groups=groups)
         + _sec_differential(rd)
         + _sec_fragmentomics(rd, groups)
         + _sec_mesa(rd)

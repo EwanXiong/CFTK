@@ -68,17 +68,18 @@ def run_wps(args):
     max_len     = getattr(args, "max_frag",   220)
     cores       = getattr(args, "cores",      1)
 
-    results = []   # list of (tsv_path, col_name)
-    for bam in args.infile:
+    workers = getattr(args, "parallel", 1) or 1
+
+    def _process_one(bam):
         if not os.path.exists(bam):
             _disp(f"[wps] WARNING: BAM not found: {bam}")
-            continue
-
+            return None
         stem     = os.path.splitext(os.path.basename(bam))[0]
-        name     = stem.replace(".markdup", "")  # clean sample name
+        name     = stem.replace(".markdup", "")
         out_tsv  = os.path.join(out_dir, f"{name}.wps.tsv")
-        col_name = name
-
+        if os.path.exists(out_tsv):
+            _disp(f"[wps] {name} — already done, skipping")
+            return (out_tsv, name)
         _disp(f"WPS: {name}")
         chrom_results = Parallel(n_jobs=cores, backend="multiprocessing")(
             delayed(_wps_chrom)(bam, regions, chrom,
@@ -86,10 +87,19 @@ def run_wps(args):
             for chrom in chrom_list
         )
         pd.concat(chrom_results).to_csv(out_tsv, sep="\t", index=False)
-        results.append((out_tsv, col_name))
         _disp(f"[wps] saved → {out_tsv}")
+        return (out_tsv, name)
 
-    # auto-merge
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+    raw = []
+    with ThreadPoolExecutor(max_workers=workers) as ex:
+        futures = {ex.submit(_process_one, bam): bam for bam in args.infile}
+        for fut in as_completed(futures):
+            res = fut.result()
+            if res:
+                raw.append(res)
+
+    results = [r for r in raw if r is not None]
     if len(results) > 1:
         _merge_wps(results, out_dir)
     elif len(results) == 1:

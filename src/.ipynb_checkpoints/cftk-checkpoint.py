@@ -183,7 +183,7 @@ def _resolve_bedgraphs(cfg, paths, group_name, selected_names=None):
 
 
 def _cmd_frag(args):
-    from init import get_all_samples, get_bam
+    from init import get_all_samples, get_bam, get_group_names
     from analysis.delfi import run_delfi
     from analysis.end_motif import run_end_motif
     from analysis.cleavage import run_cleavage
@@ -252,10 +252,17 @@ def _cmd_frag(args):
         getattr(args, "cleavage",   False),
     ])
 
+    # group_labels for per-group plots in frag visualization
+    ga, gb = get_group_names(cfg)
+    args.group_labels = {
+        ga: [s["name"] for s in cfg["samples"].get(ga, [])],
+        gb: [s["name"] for s in cfg["samples"].get(gb, [])],
+    }
+
     if run_all or getattr(args, "occupancy", False):
         os.makedirs(paths["occ_out"], exist_ok=True)
         run_occupancy(args)
-        #plot_fragmentomics(args, mode="occupancy")
+        plot_fragmentomics(args, mode="occupancy")
     if run_all or getattr(args, "wps", False):
         os.makedirs(paths["wps_out"], exist_ok=True)
         run_wps(args)
@@ -310,14 +317,32 @@ def _cmd_mesa(args):
 
 
 def _make_label(cfg, paths):
-    """Generate label.tsv: sample_name TAB 0|1 (group_a=0, group_b=1)."""
+    """
+    Generate label.tsv: sample_name TAB 0|1.
+    Convention: Control/normal group = 0, Disease/case group = 1.
+    Disease group is detected by keywords in group name.
+    If ga matches disease keywords → ga=1, gb=0.
+    Otherwise falls back to comparison order: ga=0, gb=1.
+    """
     import pandas as pd
+    from util import disp
     ga, gb = cfg["comparison"].split("_vs_", 1)
-    rows   = [(s["name"], 0) for s in cfg["samples"].get(ga, [])] + \
-             [(s["name"], 1) for s in cfg["samples"].get(gb, [])]
+
+    _disease_kw = ("als", "cancer", "disease", "tumor", "case", "patient",
+                   "mut", "ad", "pd", "ms", "hd", "treatment", "case")
+    ga_is_disease = any(kw in ga.lower() for kw in _disease_kw)
+    gb_is_disease = any(kw in gb.lower() for kw in _disease_kw)
+
+    if ga_is_disease and not gb_is_disease:
+        label_a, label_b = 1, 0
+    else:
+        label_a, label_b = 0, 1
+
+    rows = [(s["name"], label_a) for s in cfg["samples"].get(ga, [])] +            [(s["name"], label_b) for s in cfg["samples"].get(gb, [])]
     label_path = os.path.join(paths["mesa"], "label.tsv")
     os.makedirs(paths["mesa"], exist_ok=True)
     pd.DataFrame(rows).to_csv(label_path, sep="	", header=False, index=False)
+    disp(f"[label] {ga}={label_a}, {gb}={label_b} → {label_path}")
     return label_path
 
 
@@ -332,6 +357,9 @@ def _cmd_report(args):
     args.output_dir   = paths["report"]
     args.project_name = cfg.get("project_name", "cftk_project")
     args.groups       = [ga, gb]
+    # pass config path so report_generator can read group/sample info
+    if not hasattr(args, "config"):
+        args.config = "./cftk_init.json"
 
     generate_report(args)
 
@@ -351,23 +379,236 @@ def _cmd_merge(args):
         run_merge(mod, cfg, paths)
 
 
+
+def _cmd_vis(args):
+    """
+    Re-generate visualizations from existing result files without re-running analysis.
+    Reads all required paths from config and existing output files.
+    Supported modes: power, qc, diff, dmr, frag, mesa, all
+    """
+    from init import get_group_names, get_all_samples, get_matrix_path
+    from visualization.visualization import (
+        plot_qc, plot_differential, plot_dmr,
+        plot_fragmentomics, plot_mesa, plot_power,
+    )
+    from util import disp
+
+    cfg, paths = _load(args)
+    ga, gb     = get_group_names(cfg)
+    diff_p     = _p(cfg, "analysis", "diff",  "params", default={})
+    dmr_p      = _p(cfg, "analysis", "dmr",   "params", default={})
+    frag_cfg   = _p(cfg, "analysis", "frag",  default={})
+
+    modes = args.mode if args.mode else ["all"]
+    if "all" in modes:
+        modes = ["power", "qc", "diff", "dmr", "frag", "mesa"]
+
+    group_labels = {
+        ga: [s["name"] for s in cfg["samples"].get(ga, [])],
+        gb: [s["name"] for s in cfg["samples"].get(gb, [])],
+    }
+
+    def _pf(sub, key, default=None):
+        return _p(frag_cfg, sub, "params", key, default=default)
+
+    # ── power ─────────────────────────────────────────────────────────────────
+    if "power" in modes:
+        disp("[vis] power")
+        args.output_dir = paths["power"]
+        plot_power(args)
+
+    # ── qc ────────────────────────────────────────────────────────────────────
+    if "qc" in modes:
+        qc_p = _p(cfg, "analysis", "qc", "params", default={})
+        args.output_dir   = paths["qc"]
+        args.matrices_dir = paths["cpg_matrix"]
+        args.clip_r1      = qc_p.get("clip_r1",  0)
+        args.clip_r2      = qc_p.get("clip_r2",  0)
+        args.group_labels = group_labels
+        # if args.step is set (int or single-item list), only run that step
+        # otherwise run all three steps
+        qc_step = getattr(args, "step", None)
+        if isinstance(qc_step, int):
+            qc_steps = [qc_step]
+        elif isinstance(qc_step, list) and len(qc_step) == 1:
+            qc_steps = [qc_step[0]]
+        else:
+            qc_steps = [1, 2, 3]
+        for step in qc_steps:
+            disp(f"[vis] qc step {step}")
+            args.step = step
+            plot_qc(args)
+
+    # ── diff ──────────────────────────────────────────────────────────────────
+    if "diff" in modes:
+        modalities = diff_p.get("modalities", ["cpg"])
+        for mod in modalities:
+            matrix = get_matrix_path(paths, mod)
+            if not os.path.exists(matrix):
+                disp(f"[vis] diff: matrix not found for '{mod}', skipping.")
+                continue
+            disp(f"[vis] diff — {mod}")
+            args.output_dir   = paths["differential"]
+            args.infile       = matrix
+            args.modality     = mod
+            args.feature_name = mod
+            args.group_labels = group_labels
+            args.colors       = diff_p.get("colors", None)
+            args.top_n        = diff_p.get("top_n_heatmap", 500)
+            plot_differential(args)
+
+    # ── dmr ───────────────────────────────────────────────────────────────────
+    if "dmr" in modes:
+        dmr_out = os.path.join(paths["differential"], "dmr")
+        ann_bed = os.path.join(dmr_out, "dmr_annotated.bed")
+        if not os.path.exists(ann_bed):
+            disp("[vis] dmr: dmr_annotated.bed not found, skipping.")
+        else:
+            disp("[vis] dmr")
+            args.output_dir = dmr_out
+            args.group_a    = ga
+            args.group_b    = gb
+            args.q_thr      = dmr_p.get("q_thr", 0.05)
+            args.top_n      = dmr_p.get("top_n", 20)
+            plot_dmr(args)
+
+    # ── frag ──────────────────────────────────────────────────────────────────
+    if "frag" in modes:
+        ref = cfg["reference_data"]
+        args.occ_out       = paths["occ_out"]
+        args.wps_out       = paths["wps_out"]
+        args.delfi_out     = paths["delfi_out"]
+        args.end_motif_out = paths["end_motif_out"]
+        args.cleavage_out  = paths["cleavage_out"]
+        args.region        = ref.get("tss_pas_bed", "")
+        args.bed           = ref.get("ctcf_bed", "")
+        args.upstream      = _pf("cleavage", "upstream",   default=1500)
+        args.downstream    = _pf("cleavage", "downstream", default=1500)
+        args.group_labels  = group_labels
+
+        for mode in ["occupancy", "wps", "delfi", "end_motif", "cleavage"]:
+            disp(f"[vis] frag — {mode}")
+            plot_fragmentomics(args, mode=mode)
+
+    # ── mesa ──────────────────────────────────────────────────────────────────
+    if "mesa" in modes:
+        pred_tsv = os.path.join(paths["mesa"], "loocv_predictions.tsv")
+        if not os.path.exists(pred_tsv):
+            disp("[vis] mesa: loocv_predictions.tsv not found, skipping.")
+        else:
+            disp("[vis] mesa")
+            args.output_dir = paths["mesa"]
+            plot_mesa(args)
+
 def _cmd_run_all(args):
     from util import disp
+
+    # ── process: steps 1-4 ───────────────────────────────────────────────────
     args.step = [1, 2, 3, 4]
+
+    # ── mesa: enable all three sub-steps ─────────────────────────────────────
+    args.performance = True
+    args.mesa_model  = True
+    args.loocv       = True
+    args.perf_tsv    = getattr(args, "perf_tsv", None)
+
+    def _vis(mode):
+        """Run visualization for a single mode immediately after analysis."""
+        _sa(args, "mode", [mode])
+        _sa(args, "step", None)  # reset step so vis runs all sub-steps by default
+        _cmd_vis(args)
+
     pipeline = [
-        ("power",          _cmd_power),
-        ("process",        _cmd_process),
-        ("qc (frag len)",  lambda a: (_sa(a, "step", 2), _cmd_qc(a))),
-        ("qc (meth dist)", lambda a: (_sa(a, "step", 1), _cmd_qc(a))),
-        ("diff",           _cmd_diff),
-        ("dmr",            _cmd_dmr),
-        ("frag",           _cmd_frag),
-        ("mesa",           _cmd_mesa),
-        ("report",         _cmd_report),
+        # raw data processing (trim → align → markdup → methylation)
+        # multiqc runs automatically inside process after each step
+        ("process [1-4]",       _cmd_process),
+        # QC step 1: methylation distribution + vis
+        ("qc [methylation]",    lambda a: (_sa(a, "step", 1), _cmd_qc(a))),
+        ("vis [qc step 1]",     lambda a: (_sa(a, "step", 1), _cmd_vis(a))),
+        # QC step 2: fragment length distribution + vis
+        ("qc [fragment]",       lambda a: (_sa(a, "step", 2), _cmd_qc(a))),
+        ("vis [qc step 2]",     lambda a: (_sa(a, "step", 2), _cmd_vis(a))),
+        # QC step 3: dinucleotide frequency + vis
+        ("qc [dinucleotide]",   lambda a: (_sa(a, "step", 3), _cmd_qc(a))),
+        ("vis [qc step 3]",     lambda a: (_sa(a, "step", 3), _cmd_vis(a))),
+        # differential analysis + vis
+        ("diff",                _cmd_diff),
+        ("vis [diff]",          lambda a: _vis("diff")),
+        # DMR analysis + vis
+        ("dmr",                 _cmd_dmr),
+        ("vis [dmr]",           lambda a: _vis("dmr")),
+        # fragmentomics + vis
+        ("frag",                _cmd_frag),
+        ("vis [frag]",          lambda a: _vis("frag")),
+        # MESA multimodal (performance + model + LOOCV) + vis
+        ("mesa",                _cmd_mesa),
+        ("vis [mesa]",          lambda a: _vis("mesa")),
+        # report
+        ("report",              _cmd_report),
     ]
+
+    # ── checkpoint: detect already-completed steps by key output files ─────
+    cfg, paths = _load(args)
+    all_samples = [s["name"] for g in cfg["samples"].values() for s in g]
+
+    def _done_process():
+        """All samples have markdup BAM and cpg_matrix.tsv exists."""
+        cpg = os.path.join(paths["cpg_matrix"], "cpg_matrix.tsv")
+        if not os.path.exists(cpg):
+            return False
+        for name in all_samples:
+            bam = os.path.join(paths["markdup"], f"{name}.markdup.bam")
+            if not os.path.exists(bam):
+                return False
+        return True
+
+    def _done_qc(step):
+        step_dirs = {1: "1_methylation_distribution",
+                     2: "2_fragment_length",
+                     3: "3_dinucleotide_freq"}
+        d = os.path.join(paths["qc"], step_dirs[step])
+        return os.path.isdir(d) and bool(glob.glob(os.path.join(d, "*.png")))
+
+    def _done_diff():
+        d = paths["differential"]
+        return os.path.isdir(d) and bool(glob.glob(os.path.join(d, "**", "*.tsv"), recursive=True))
+
+    def _done_dmr():
+        d = os.path.join(paths["differential"], "dmr")
+        return os.path.isdir(d) and bool(glob.glob(os.path.join(d, "*.bed*")))
+
+    def _done_frag():
+        d = paths["fragmentomics"]
+        return os.path.isdir(d) and bool(glob.glob(os.path.join(d, "**", "*.tsv"), recursive=True))
+
+    def _done_mesa():
+        return os.path.exists(os.path.join(paths["mesa"], "loocv_predictions.tsv"))
+
+    # checkpoint map: step_name → done-check function (None = always run)
+    checkpoints = {
+        "process [1-4]":    _done_process,
+        "qc [methylation]": lambda: _done_qc(1),
+        "qc [fragment]":    lambda: _done_qc(2),
+        "qc [dinucleotide]":lambda: _done_qc(3),
+        "diff":             _done_diff,
+        "dmr":              _done_dmr,
+        "frag":             _done_frag,
+        "mesa":             _done_mesa,
+    }
+
+    import glob
     for name, fn in pipeline:
+        check = checkpoints.get(name)
+        if check and check():
+            disp(f"[run-all] ── {name} — already done, skipping ──")
+            continue
         disp(f"[run-all] ── {name} ──")
-        fn(args)
+        try:
+            fn(args)
+        except Exception as e:
+            disp(f"[run-all] WARNING: {name} failed: {e}")
+            disp(f"[run-all] continuing...")
+
     disp("[run-all] pipeline complete.")
 
 
@@ -484,6 +725,19 @@ def build_parser():
                    help="Modality/modalities to merge. "
                         "Default: all keys in config merge block.")
     p.set_defaults(func=_cmd_merge)
+
+    # vis
+    p = sub.add_parser("vis",
+        help="Re-generate visualizations from existing results without re-running analysis.\n"
+             "Reads all result files from their canonical output locations.\n"
+             "Modes: power, qc, diff, dmr, frag, mesa, all (default)")
+    p.add_argument("--mode", nargs="+", default=None,
+                   choices=["power", "qc", "diff", "dmr", "frag", "mesa", "all"],
+                   metavar="MODE",
+                   help="Which visualizations to regenerate. "
+                        "Default: all. "
+                        "Choices: power qc diff dmr frag mesa all")
+    p.set_defaults(func=_cmd_vis)
 
     # report
     p = sub.add_parser("report",

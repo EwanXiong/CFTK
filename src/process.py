@@ -43,6 +43,7 @@ def _step1_trim(sample, step_cfg, ref_data, paths, per_cores):
     if tool == "trim_galore":
         cmd = (
             f"trim_galore --paired --2colour 20 --cores {per_cores} "
+            f"--fastqc "  # generate FastQC reports for MultiQC
             f"-o {out} --basename {name} {extra} "
             f"{sample['r1']} {sample['r2']} || exit 1"
         )
@@ -61,6 +62,32 @@ def _step1_trim(sample, step_cfg, ref_data, paths, per_cores):
     ext    = "fq.gz" if sample["r1"].endswith(".gz") else "fq"
     r1_out = os.path.join(out, f"{name}_val_1.{ext}")
     r2_out = os.path.join(out, f"{name}_val_2.{ext}")
+
+    if tool == "trim_galore":
+        # Trim Galore names reports after the input fastq filename.
+        # Rename all report/fastqc files to use sample name instead.
+        import glob as _glob
+        r1_base = os.path.splitext(os.path.splitext(os.path.basename(sample["r1"]))[0])[0]
+        r2_base = os.path.splitext(os.path.splitext(os.path.basename(sample["r2"]))[0])[0]
+        rename_map = [
+            # trimming reports
+            (f"{r1_base}.fastq.gz_trimming_report.txt", f"{name}_R1_trimming_report.txt"),
+            (f"{r2_base}.fastq.gz_trimming_report.txt", f"{name}_R2_trimming_report.txt"),
+            (f"{r1_base}_trimming_report.txt",           f"{name}_R1_trimming_report.txt"),
+            (f"{r2_base}_trimming_report.txt",           f"{name}_R2_trimming_report.txt"),
+            # fastqc reports (zip + html)
+            (f"{name}_val_1_fastqc.zip",  f"{name}_R1_fastqc.zip"),
+            (f"{name}_val_1_fastqc.html", f"{name}_R1_fastqc.html"),
+            (f"{name}_val_2_fastqc.zip",  f"{name}_R2_fastqc.zip"),
+            (f"{name}_val_2_fastqc.html", f"{name}_R2_fastqc.html"),
+        ]
+        for old_name, new_name in rename_map:
+            old_path = os.path.join(out, old_name)
+            new_path = os.path.join(out, new_name)
+            if os.path.exists(old_path) and not os.path.exists(new_path):
+                os.rename(old_path, new_path)
+                disp(f"  [trim] renamed: {old_name} → {new_name}")
+
     return r1_out, r2_out
 
 
@@ -92,6 +119,15 @@ def _step2_align(sample, r1, r2, step_cfg, ref_data, paths, per_cores):
         sys.exit(f"[step2] unsupported tool: {tool}. Supported: {SUPPORTED_TOOLS[2]}")
 
     run_command(cmd, label=f"align [{name}]")
+    # generate samtools flagstat + stats for MultiQC
+    run_command(
+        f"samtools flagstat -@ {per_cores} {bam} > {bam}.flagstat",
+        label=f"flagstat [{name}]"
+    )
+    run_command(
+        f"samtools stats   -@ {per_cores} {bam} > {bam}.stats",
+        label=f"samtools_stats [{name}]"
+    )
     return bam
 
 
@@ -142,14 +178,16 @@ def _step4_methylation(sample, bam_in, step_cfg, ref_data, paths, per_cores):
     prefix = os.path.join(out, name)
 
     if tool == "methyldackel":
-        mbias = f"{prefix}_mbias_OT_OB.temp"
+        # *_mbias.txt is recognised by MultiQC
+        mbias_txt = f"{prefix}_mbias.txt"
+        mbias_temp = f"{prefix}_mbias_OT_OB.temp"
         cmd = (
             f"MethylDackel mbias -@ {per_cores} {ref} {bam_in} {prefix} "
-            f"&> {mbias} || exit 1; "
+            f"2>&1 | tee {mbias_txt} > {mbias_temp} || exit 1; "
             f"MethylDackel extract --minDepth {depth} --maxVariantFrac 0.25 "
             f"-@ {per_cores} "
-            f"--OT $(grep -oP '(?<=--OT )[^ ]+' {mbias}) "
-            f"--OB $(grep -oP '(?<=--OB )[^ ]+' {mbias}) "
+            f"--OT $(grep -oP '(?<=--OT )[^ ]+' {mbias_temp}) "
+            f"--OB $(grep -oP '(?<=--OB )[^ ]+' {mbias_temp}) "
             f"-o {prefix} {extra} {ref} {bam_in} || exit 1"
         )
     elif tool == "bismark_extractor":
@@ -168,25 +206,68 @@ def _step4_methylation(sample, bam_in, step_cfg, ref_data, paths, per_cores):
 
 # ── CPG merge (auto after step4) ──────────────────────────────────────────────
 
-def _merge_cpg(bedgraph_files, paths):
-    """Merge all CpG bedGraph files into cpg_matrix.tsv."""
+def _merge_cpg(bedgraph_files, samples, paths):
+    """
+    Merge per-sample CpG bedGraph files into cpg_matrix.tsv.
+    Uses bedtools unionbedg for coordinate-level merging — avoids duplicate
+    index errors from MethylDackel outputting both strands at the same position.
+    Column names: {group}_{sample_name} so startswith(group) matching works
+    in downstream diff/mesa analysis.
+    """
+    import shutil
+    import subprocess
     import pandas as pd
 
     out_dir = paths["cpg_matrix"]
     os.makedirs(out_dir, exist_ok=True)
     out_path = os.path.join(out_dir, "cpg_matrix.tsv")
 
-    disp(f"[merge] merging {len(bedgraph_files)} bedGraph files → {out_path}")
-    frames = {}
-    for fp in bedgraph_files:
-        name = os.path.basename(fp).replace("_CpG.bedGraph", "")
-        df   = pd.read_csv(fp, sep="\t", header=None, comment="t", usecols=[0, 1, 3])
-        df.columns = ["chr", "pos", name]
-        df.index   = df["chr"] + "_" + df["pos"].astype(str)
-        frames[name] = df[name]
+    bedtools = shutil.which("bedtools")
+    if bedtools is None:
+        sys.exit("[merge] ERROR: bedtools not found in PATH.")
 
-    matrix = pd.DataFrame(frames)
+    # col_name = sample["name"] directly (user controls naming in json)
+    name_map = {s["name"]: s["name"] for s in samples}
+    col_names = []
+    for fp in bedgraph_files:
+        sample_name = os.path.basename(fp).replace("_CpG.bedGraph", "")
+        col_names.append(name_map.get(sample_name, sample_name))
+    col_names_str = " ".join(col_names)
+
+    stripped = " ".join(
+        f"<(grep -v '^track' {fp} | cut -f1-4)" for fp in bedgraph_files
+    )
+    tmp_path = out_path + ".tmp"
+    cmd = (
+        f"bash -c '"
+        f"{bedtools} unionbedg -header -names {col_names_str} -filler NA "
+        f"-i {stripped}"
+        f" | cut -f1,3-"
+        f" | sed s/end/pos/"
+        f" > {tmp_path}'"
+    )
+
+    disp(f"[merge] bedtools unionbedg: {len(bedgraph_files)} files → {out_path}")
+    ret = subprocess.run(cmd, shell=True)
+    if ret.returncode != 0:
+        sys.exit("[merge] ERROR: bedtools unionbedg failed.")
+
+    # read tmp, combine chrom+pos → chrom_pos index (e.g. chr1_17378)
+    matrix = pd.read_csv(tmp_path, sep="\t")
+    # column 0 is chrom (may be named "chrom" or "chr"), column 1 is pos
+    chrom_col = matrix.columns[0]
+    pos_col   = matrix.columns[1]
+    matrix.index = matrix[chrom_col].astype(str) + "_" + matrix[pos_col].astype(str)
+    matrix.index.name = "cpg_id"
+    matrix = matrix.drop(columns=[chrom_col, pos_col])
+    # drop duplicate positions (e.g. from both strands or overlapping regions)
+    n_before = len(matrix)
+    matrix = matrix[~matrix.index.duplicated(keep="first")]
+    n_dropped = n_before - len(matrix)
+    if n_dropped > 0:
+        disp(f"[merge] dropped {n_dropped} duplicate CpG positions")
     matrix.to_csv(out_path, sep="\t")
+    os.remove(tmp_path)
     disp(f"[merge] {matrix.shape[0]} CpGs × {matrix.shape[1]} samples → {out_path}")
     return out_path
 
@@ -195,7 +276,14 @@ def _merge_cpg(bedgraph_files, paths):
 
 def _run_step1(sample, proc, ref, paths, per_cores):
     """Trimming for one sample. Returns (r1, r2) or (None, None)."""
-    disp(f"  [step1] {sample['name']}")
+    name = sample["name"]
+    ext  = "fq.gz" if sample.get("r1", "").endswith(".gz") else "fq"
+    r1_done = os.path.join(paths["trimming"], f"{name}_val_1.{ext}")
+    r2_done = os.path.join(paths["trimming"], f"{name}_val_2.{ext}")
+    if os.path.exists(r1_done) and os.path.exists(r2_done):
+        disp(f"  [step1] {name} — already done, skipping")
+        return r1_done, r2_done
+    disp(f"  [step1] {name}")
     return _step1_trim(sample, proc["step1_trimming"], ref, paths, per_cores)
 
 
@@ -223,13 +311,22 @@ def _run_step2(sample, proc, ref, paths, per_cores):
         )
         sys.exit(msg)
 
+    bam_done = os.path.join(paths["alignment"], f"{name}.bam")
+    if os.path.exists(bam_done):
+        disp(f"  [step2] {name} — already done, skipping")
+        return bam_done
     return _step2_align(sample, r1, r2, proc["step2_alignment"],
                         ref, paths, per_cores)
 
 
 def _run_step3(sample, proc, ref, paths, per_cores):
     """Mark duplicates for one sample. Returns markdup bam path."""
-    disp(f"  [step3] {sample['name']}")
+    name    = sample["name"]
+    bam_done = os.path.join(paths["markdup"], f"{name}.markdup.bam")
+    if os.path.exists(bam_done):
+        disp(f"  [step3] {name} — already done, skipping")
+        return bam_done
+    disp(f"  [step3] {name}")
     bam_in = get_bam(sample, paths)
     if not (bam_in and os.path.exists(bam_in)):
         disp(f"  [step3] ERROR: BAM not found for {sample['name']}: {bam_in}")
@@ -240,7 +337,12 @@ def _run_step3(sample, proc, ref, paths, per_cores):
 
 def _run_step4(sample, proc, ref, paths, per_cores):
     """Methylation calling for one sample. Returns bedGraph path or None."""
-    disp(f"  [step4] {sample['name']}")
+    name    = sample["name"]
+    bg_done = os.path.join(paths["methylation"], f"{name}_CpG.bedGraph")
+    if os.path.exists(bg_done):
+        disp(f"  [step4] {name} — already done, skipping")
+        return bg_done
+    disp(f"  [step4] {name}")
     bam_in = get_bam(sample, paths)
     if not (bam_in and os.path.exists(bam_in)):
         disp(f"  [step4] ERROR: BAM not found for {sample['name']}: {bam_in}")
@@ -260,6 +362,67 @@ _STEP_FN = {
 
 
 # ── Main entry ────────────────────────────────────────────────────────────────
+
+
+# ── MultiQC ──────────────────────────────────────────────────────────────────
+
+# keys must match paths dict from init.py get_work_paths()
+# only steps 1 and 2 produce MultiQC-recognisable output
+_MULTIQC_STEP = {
+    1: "trimming",
+    2: "alignment",
+}
+
+_MULTIQC_TITLE = {
+    1: "Trim Galore QC",
+    2: "bwameth Alignment",
+}
+
+
+def _run_multiqc(step, paths):
+    """
+    Run MultiQC on the output directory of a completed step.
+    Results saved to {step_dir}/multiqc/.
+    Silently skips if multiqc is not installed.
+    """
+    import shutil
+    multiqc = shutil.which("multiqc")
+    if not multiqc:
+        disp(f"[multiqc] step {step}: multiqc not found, skipping.")
+        return
+
+    if step not in _MULTIQC_STEP:
+        return  # no MultiQC for this step
+    step_dir  = paths.get(_MULTIQC_STEP[step], "")
+    if not step_dir or not os.path.exists(step_dir):
+        disp(f"[multiqc] step {step}: directory not found ({step_dir}), skipping.")
+        return
+
+    out_dir = os.path.join(step_dir, "multiqc")
+    os.makedirs(out_dir, exist_ok=True)
+
+    title = _MULTIQC_TITLE.get(step, f"Step {step}")
+    scan_dirs = step_dir
+    # ignore large fastq/bam files to speed up scanning
+    ignore_flags = "--ignore '*.fq.gz' --ignore '*.fastq.gz' --ignore '*.bam' --ignore '*.bai'"
+    cmd = (
+        f"{multiqc} {scan_dirs} "
+        f"--outdir {out_dir} "
+        f"--filename multiqc_report.html "
+        f"--title \"{title}\" "
+        f"--export "
+        f"{ignore_flags} "
+        f"--force "
+        f"--quiet"
+    )
+    disp(f"[multiqc] step {step}: running MultiQC on {scan_dirs}")
+    run_command(cmd, label=f"multiqc [step {step}]")
+    html_out = os.path.join(out_dir, "multiqc_report.html")
+    if os.path.exists(html_out):
+        disp(f"[multiqc] step {step}: report → {html_out}")
+    else:
+        disp(f"[multiqc] step {step}: WARNING — multiqc_report.html not found")
+
 
 def process(args, config_path="./cftk_init.json"):
     """
@@ -328,13 +491,14 @@ def process(args, config_path="./cftk_init.json"):
             bedgraph_results = results
 
         disp(f"[step {step}] all samples complete.")
+        _run_multiqc(step, paths)
 
     # ── Auto-merge cpg after step 4 ───────────────────────────────────────────
     if 4 in steps:
         successful = [bg for bg in bedgraph_results
                       if bg and os.path.exists(bg)]
         if len(successful) > 1:
-            _merge_cpg(successful, paths)
+            _merge_cpg(successful, samples, paths)
         elif len(successful) == 1:
             disp("[merge] Single sample — skipping cpg_matrix merge.")
         else:

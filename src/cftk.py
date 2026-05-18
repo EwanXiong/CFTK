@@ -13,6 +13,17 @@ if _SRC not in sys.path:
 def _load(args):
     from init import load_config, get_work_paths
     cfg   = load_config(args.config)
+    # normalise: support both "comparison" and "control_group"/"case_group"
+    if "comparison" not in cfg:
+        cg = cfg.get("control_group", "")
+        ag = cfg.get("case_group",    "")
+        if cg and ag:
+            cfg["comparison"] = f"{cg}_vs_{ag}"
+        else:
+            raise KeyError(
+                "Config must have 'comparison' (e.g. 'Control_vs_sALS') "
+                "or both 'control_group' and 'case_group'."
+            )
     paths = get_work_paths(cfg)
     return cfg, paths
 
@@ -197,6 +208,9 @@ def _cmd_frag(args):
 
     args.infile      = [get_bam(s, paths) for s in get_all_samples(cfg)]
     args.cores       = _p(cfg, "process", "step3_markdup", "params", "cores", default=20)
+    # parallel samples: CLI --parallel > config parallel_samples > 1
+    args.parallel    = getattr(args, "parallel", None) or \
+                       _p(cfg, "process", "parallel_samples", default=1)
 
     # reference paths shared across sub-analyses
     args.chrom_sizes = ref.get("chrom_sizes", "")
@@ -285,10 +299,26 @@ def _cmd_mesa(args):
     from init import get_matrix_path
     from analysis.mesa import run_modality_performance, run_mesa_model, run_mesa_loocv
     from visualization.visualization import plot_mesa
+    from util import disp
 
+    disp("[mesa] starting _cmd_mesa")
+    # redirect stdin to /dev/null to prevent background process hangs
+    try:
+        import sys as _sys
+        if not _sys.stdin.isatty():
+            _sys.stdin = open(os.devnull, "r")
+    except Exception:
+        pass
     cfg, paths = _load(args)
+    disp("[mesa] config loaded")
     mesa_p = _p(cfg, "analysis", "mesa", "params", default={})
-    ga, gb = cfg["comparison"].split("_vs_", 1)
+    # support both "comparison" and "control_group"/"case_group" formats
+    if "comparison" in cfg:
+        ga, gb = cfg["comparison"].split("_vs_", 1)
+    else:
+        ga = cfg.get("control_group", "")
+        gb = cfg.get("case_group", "")
+    disp(f"[mesa] groups: {ga} vs {gb}")
 
     args.output_dir = paths["mesa"]
     args.clf        = mesa_p.get("clf",          [1, 2, 3])
@@ -298,13 +328,10 @@ def _cmd_mesa(args):
     args.cores      = _p(cfg, "process", "step4_methylation", "params", "cores", default=-1)
     os.makedirs(paths["mesa"], exist_ok=True)
 
-    if not getattr(args, "modality", None):
-        args.modality = mesa_p.get("modalities", ["cpg"])
-    # use canonical matrix paths per modality
-    if not getattr(args, "infile", None):
-        args.infile = [get_matrix_path(paths, m) for m in args.modality]
-    if not getattr(args, "label", None):
-        args.label = _make_label(cfg, paths)
+    # always recompute from config — never reuse args from previous steps
+    args.modality = mesa_p.get("modalities", ["cpg"])
+    args.infile   = [get_matrix_path(paths, m) for m in args.modality]
+    args.label    = _make_label(cfg, paths)
 
     performance = None
     if getattr(args, "performance", False):
@@ -317,14 +344,32 @@ def _cmd_mesa(args):
 
 
 def _make_label(cfg, paths):
-    """Generate label.tsv: sample_name TAB 0|1 (group_a=0, group_b=1)."""
+    """
+    Generate label.tsv: sample_name TAB 0|1.
+    Convention: Control/normal group = 0, Disease/case group = 1.
+    Disease group is detected by keywords in group name.
+    If ga matches disease keywords → ga=1, gb=0.
+    Otherwise falls back to comparison order: ga=0, gb=1.
+    """
     import pandas as pd
+    from util import disp
     ga, gb = cfg["comparison"].split("_vs_", 1)
-    rows   = [(s["name"], 0) for s in cfg["samples"].get(ga, [])] + \
-             [(s["name"], 1) for s in cfg["samples"].get(gb, [])]
+
+    _disease_kw = ("als", "cancer", "disease", "tumor", "case", "patient",
+                   "mut", "ad", "pd", "ms", "hd", "treatment", "case")
+    ga_is_disease = any(kw in ga.lower() for kw in _disease_kw)
+    gb_is_disease = any(kw in gb.lower() for kw in _disease_kw)
+
+    if ga_is_disease and not gb_is_disease:
+        label_a, label_b = 1, 0
+    else:
+        label_a, label_b = 0, 1
+
+    rows = [(s["name"], label_a) for s in cfg["samples"].get(ga, [])] +            [(s["name"], label_b) for s in cfg["samples"].get(gb, [])]
     label_path = os.path.join(paths["mesa"], "label.tsv")
     os.makedirs(paths["mesa"], exist_ok=True)
     pd.DataFrame(rows).to_csv(label_path, sep="	", header=False, index=False)
+    disp(f"[label] {ga}={label_a}, {gb}={label_b} → {label_path}")
     return label_path
 
 
@@ -339,6 +384,9 @@ def _cmd_report(args):
     args.output_dir   = paths["report"]
     args.project_name = cfg.get("project_name", "cftk_project")
     args.groups       = [ga, gb]
+    # pass config path so report_generator can read group/sample info
+    if not hasattr(args, "config"):
+        args.config = "./cftk_init.json"
 
     generate_report(args)
 
@@ -404,7 +452,16 @@ def _cmd_vis(args):
         args.clip_r1      = qc_p.get("clip_r1",  0)
         args.clip_r2      = qc_p.get("clip_r2",  0)
         args.group_labels = group_labels
-        for step in [1, 2, 3]:
+        # if args.step is set (int or single-item list), only run that step
+        # otherwise run all three steps
+        qc_step = getattr(args, "step", None)
+        if isinstance(qc_step, int):
+            qc_steps = [qc_step]
+        elif isinstance(qc_step, list) and len(qc_step) == 1:
+            qc_steps = [qc_step[0]]
+        else:
+            qc_steps = [1, 2, 3]
+        for step in qc_steps:
             disp(f"[vis] qc step {step}")
             args.step = step
             plot_qc(args)
@@ -472,21 +529,141 @@ def _cmd_vis(args):
 
 def _cmd_run_all(args):
     from util import disp
+
+    # ── process: steps 1-4 ───────────────────────────────────────────────────
     args.step = [1, 2, 3, 4]
+
+    # ── mesa: enable all three sub-steps ─────────────────────────────────────
+    args.performance = True
+    args.mesa_model  = True
+    args.loocv       = True
+    args.perf_tsv    = getattr(args, "perf_tsv", None)
+
+    def _vis(mode):
+        """Run visualization for a single mode immediately after analysis."""
+        _sa(args, "mode", [mode])
+        _sa(args, "step", None)  # reset step so vis runs all sub-steps by default
+        _cmd_vis(args)
+
+    # ── checkpoint helpers ────────────────────────────────────────────────
+    import glob as _glob
+    cfg, paths = _load(args)
+    all_samples = [s["name"] for g in cfg["samples"].values() for s in g]
+
+    def _done_process():
+        cpg = os.path.join(paths["cpg_matrix"], "cpg_matrix.tsv")
+        if not os.path.exists(cpg):
+            return False
+        return all(
+            os.path.exists(os.path.join(paths["markdup"], f"{n}.markdup.bam"))
+            for n in all_samples
+        )
+
+    def _done_qc(step):
+        step_dirs = {1: "1_methylation_distribution",
+                     2: "2_fragment_length", 3: "3_dinucleotide_freq"}
+        d = os.path.join(paths["qc"], step_dirs[step])
+        return os.path.isdir(d) and bool(_glob.glob(os.path.join(d, "*.png")))
+
+    def _done_diff():
+        d = paths["differential"]
+        return os.path.isdir(d) and bool(
+            _glob.glob(os.path.join(d, "**", "*.tsv"), recursive=True))
+
+    def _done_dmr():
+        d = os.path.join(paths["differential"], "dmr")
+        return os.path.isdir(d) and bool(_glob.glob(os.path.join(d, "*.bed*")))
+
+    def _done_frag():
+        d = paths["fragmentomics"]
+        return os.path.isdir(d) and bool(
+            _glob.glob(os.path.join(d, "**", "*.tsv"), recursive=True))
+
+    def _done_mesa():
+        return os.path.exists(os.path.join(paths["mesa"], "loocv_predictions.tsv"))
+
+    # ── pipeline: (step_name, analysis_fn, vis_fn_or_None, checkpoint_fn_or_None)
+    # vis_fn is only called if analysis was NOT skipped by checkpoint
+    # report always runs (no checkpoint, always regenerate)
     pipeline = [
-        ("power",          _cmd_power),
-        ("process",        _cmd_process),
-        ("qc (frag len)",  lambda a: (_sa(a, "step", 2), _cmd_qc(a))),
-        ("qc (meth dist)", lambda a: (_sa(a, "step", 1), _cmd_qc(a))),
-        ("diff",           _cmd_diff),
-        ("dmr",            _cmd_dmr),
-        ("frag",           _cmd_frag),
-        ("mesa",           _cmd_mesa),
-        ("report",         _cmd_report),
+        # (step_name,          analysis_fn,
+        #  vis_fn,             checkpoint_fn)
+        ("process [1-4]",
+         _cmd_process,
+         None,
+         _done_process),
+
+        ("qc [methylation]",
+         lambda a: (_sa(a, "step", 1), _cmd_qc(a)),
+         lambda a: (_sa(a, "step", 1), _cmd_vis(a)),
+         lambda: _done_qc(1)),
+
+        ("qc [fragment]",
+         lambda a: (_sa(a, "step", 2), _cmd_qc(a)),
+         lambda a: (_sa(a, "step", 2), _cmd_vis(a)),
+         lambda: _done_qc(2)),
+
+        ("qc [dinucleotide]",
+         lambda a: (_sa(a, "step", 3), _cmd_qc(a)),
+         lambda a: (_sa(a, "step", 3), _cmd_vis(a)),
+         lambda: _done_qc(3)),
+
+        ("diff",
+         _cmd_diff,
+         lambda a: _vis("diff"),
+         _done_diff),
+
+        ("dmr",
+         _cmd_dmr,
+         lambda a: _vis("dmr"),
+         _done_dmr),
+
+        ("frag",
+         _cmd_frag,
+         lambda a: _vis("frag"),
+         _done_frag),
+
+        ("mesa",
+         _cmd_mesa,
+         lambda a: _vis("mesa"),
+         _done_mesa),
+
+        ("report",
+         _cmd_report,
+         None,
+         None),
     ]
-    for name, fn in pipeline:
-        disp(f"[run-all] ── {name} ──")
-        fn(args)
+
+    # ── execute pipeline ──────────────────────────────────────────────────
+    for step_name, ana_fn, vis_fn, check_fn in pipeline:
+        # checkpoint: skip analysis AND its vis if already done
+        if check_fn and check_fn():
+            disp(f"[run-all] ── {step_name} — already done, skipping ──")
+            continue
+
+        # run analysis
+        disp(f"[run-all] ── {step_name} ──")
+        ana_ok = True
+        try:
+            ana_fn(args)
+        except Exception as e:
+            import traceback
+            disp(f"[run-all] WARNING: {step_name} failed: {e}")
+            disp("[run-all] full traceback:")
+            traceback.print_exc()
+            disp("[run-all] continuing...")
+            ana_ok = False
+
+        # run vis only if analysis succeeded and vis_fn is defined
+        if ana_ok and vis_fn:
+            disp(f"[run-all] ── vis [{step_name}] ──")
+            try:
+                vis_fn(args)
+            except Exception as e:
+                import traceback
+                disp(f"[run-all] WARNING: vis [{step_name}] failed: {e}")
+                traceback.print_exc()
+
     disp("[run-all] pipeline complete.")
 
 
