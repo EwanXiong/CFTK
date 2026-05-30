@@ -1,0 +1,37 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.backends.legacy:build"
+
+[project]
+name = "cftk"
+version = "1.0.0"
+description = "cfDNA multimodal epigenetic analysis toolkit"
+readme = "README.md"
+requires-python = ">=3.9"
+license = { text = "MIT" }
+authors = [{ name = "Chaorong Chen", email = "chaorongc@example.com" }]
+
+dependencies = [
+    "numpy>=1.24",
+    "pandas>=1.5",
+    "scipy>=1.10",
+    "scikit-learn>=1.2",
+    "matplotlib>=3.7",
+    "seaborn>=0.12",
+    "adjustText>=0.8",
+    "joblib>=1.2",
+    "pysam>=0.21",
+    "pyBigWig>=0.3",
+    "bx-python>=0.9",
+    "statsmodels>=0.14",
+    "xgboost>=1.7",
+    "annotatr",
+    "finaletoolkit>=0.9",
+]
+
+[project.scripts]
+cftk = "cftk.src.cftk:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["cftk*"]
