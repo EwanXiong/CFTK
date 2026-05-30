@@ -1,0 +1,190 @@
+{
+  "project_name": "sALS_cohort1",
+  "output_dir": "/your/workdir",
+  "comparison": "Control_vs_sALS",
+  "samples": {
+    "Control": [
+      {
+        "name": "control_1",
+        "input_type": "fastq",
+        "r1": "/path/to/control_1_R1.fq.gz",
+        "r2": "/path/to/control_1_R2.fq.gz"
+      },
+      {
+        "name": "control_2",
+        "input_type": "bam",
+        "bam": "/path/to/control_2.bam"
+      }
+    ],
+    "sALS": [
+      {
+        "name": "sALS_1",
+        "input_type": "fastq",
+        "r1": "/path/to/sALS_1_R1.fq.gz",
+        "r2": "/path/to/sALS_1_R2.fq.gz"
+      }
+    ]
+  },
+  "reference_data": {
+    "genome_fa": "/path/to/hg38.fa",
+    "genome_2bit": "/path/to/hg38.2bit",
+    "chrom_sizes": "/path/to/hg38.autosomes.chrom.sizes",
+    "genome_build": "hg38",
+    "tss_pas_bed": "/path/to/hg38_annotated_collapsed_TSS_PAS_1kb.bed",
+    "ctcf_bed": "/path/to/GRCh38-cCREs.CA-CTCF.bed",
+    "blacklist": "/path/to/hg38-blacklist.v2.bed",
+    "gap": "/path/to/hg38_gap_filtered.bed",
+    "bins": "/path/to/hg38.5mb.bins.bed",
+    "cpg_std": "/path/to/cftk_cpg_std.pkl"
+  },
+  "process": {
+    "step1_trimming": {
+      "tool": "trim_galore",
+      "params": {
+        "cores": 20,
+        "extra_args": "--clip_R1 10 --clip_R2 10 --three_prime_clip_R1 5 --three_prime_clip_R2 5"
+      }
+    },
+    "step2_alignment": {
+      "tool": "bwameth",
+      "params": {
+        "cores": 20,
+        "extra_args": ""
+      }
+    },
+    "step3_markdup": {
+      "tool": "sambamba",
+      "params": {
+        "cores": 20,
+        "extra_args": ""
+      }
+    },
+    "step4_methylation": {
+      "tool": "methyldackel",
+      "params": {
+        "cores": 20,
+        "min_depth": 10,
+        "extra_args": ""
+      }
+    }
+  },
+  "analysis": {
+    "qc": {
+      "params": {
+        "clip_r1": 0,
+        "clip_r2": 0,
+        "fragment": 167,
+        "step_size": 2000
+      }
+    },
+    "power": {
+      "params": {
+        "sample_size": 100,
+        "effect_size": 0.1,
+        "depth": [
+          10,
+          20,
+          50
+        ],
+        "ratio": 1.0,
+        "plot_threshold": 0.8,
+        "step_size": 10000
+      }
+    },
+    "diff": {
+      "params": {
+        "modalities": [
+          "cpg",
+          "occupancy",
+          "wps"
+        ],
+        "colors": [
+          "#4575b4",
+          "#d73027"
+        ],
+        "top_n_heatmap": 500
+      }
+    },
+    "dmr": {
+      "tool": "metilene",
+      "params": {
+        "cores": 20,
+        "q_thr": 0.05,
+        "top_n": 20,
+        "extra_args": ""
+      },
+      "samples": {
+        "Control": [
+          "control_1",
+          "control_2"
+        ],
+        "sALS": [
+          "sALS_1"
+        ]
+      }
+    },
+    "frag": {
+      "occupancy": {
+        "tool": "danpos",
+        "params": {
+          "extra_args": "--paired 1 -u 0 -c 1000000"
+        }
+      },
+      "wps": {
+        "params": {
+          "wps_window": 120,
+          "wps_step": 10,
+          "min_frag": 100,
+          "max_frag": 220
+        }
+      },
+      "delfi": {
+        "tool": "finaletoolkit",
+        "params": {
+          "mapq": 30,
+          "window": 20,
+          "extra_args": ""
+        }
+      },
+      "end_motif": {
+        "tool": "finaletoolkit",
+        "params": {
+          "kmer": 4,
+          "min_frag": 100,
+          "max_frag": 220,
+          "mapq": 30,
+          "extra_args": ""
+        }
+      },
+      "cleavage": {
+        "tool": "finaletoolkit",
+        "params": {
+          "min_frag": 100,
+          "max_frag": 220,
+          "mapq": 30,
+          "window": 20,
+          "upstream": 1500,
+          "downstream": 1500,
+          "extra_args": ""
+        }
+      }
+    },
+    "mesa": {
+      "params": {
+        "modalities": [
+          "cpg",
+          "occupancy",
+          "wps"
+        ],
+        "clf": [
+          1,
+          2,
+          3
+        ],
+        "feature_size": 100,
+        "subset": 0.1,
+        "repeat": 3
+      }
+    }
+  }
+}
