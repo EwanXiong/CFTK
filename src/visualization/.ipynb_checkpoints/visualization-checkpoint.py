@@ -1,15 +1,13 @@
 """
 visualization.py — unified visualization dispatcher.
 All plot functions save both PNG (300 dpi) and PDF.
-
-M3d: step 0 plot removed from plot_qc() — QC summary is now an interactive
-     Plotly table rendered directly in report_generator._qc_table().
 """
 
 import os
 
 
 def _out(base_dir, *parts, stem):
+    """Return (png_path, pdf_path) under base_dir/parts/stem."""
     d = os.path.join(base_dir, *parts)
     os.makedirs(d, exist_ok=True)
     return os.path.join(d, f"{stem}.png"), os.path.join(d, f"{stem}.pdf")
@@ -20,12 +18,10 @@ def _out(base_dir, *parts, stem):
 def plot_qc(args):
     """
     Visualization dispatcher for QC steps.
-
-    Step 0: No plot — QC summary is rendered as an interactive Plotly table
-            in report_generator._qc_table() (M3d).
-    Step 1: methylation β-value density
-    Step 2: fragment length distribution
-    Step 3: dinucleotide frequency
+    Computation (run_qc) must run first; this function reads its outputs.
+    Step 1: reads cpg_matrix.tsv from args.matrices_dir
+    Step 2: reads raw fragment length CSVs from args.output_dir
+    Step 3: reads dinucleotide count files from args.output_dir
     """
     from visualization.plot_qc import (
         plot_methylation_distribution,
@@ -34,10 +30,6 @@ def plot_qc(args):
     )
     out_dir = getattr(args, "output_dir", "results/2_qc")
     step    = args.step
-
-    # M3d: step 0 has no plot output — skip silently
-    if step == 0:
-        return
 
     if step == 1:
         sub_dir = os.path.join(out_dir, "1_methylation_distribution")
@@ -51,6 +43,7 @@ def plot_qc(args):
         os.makedirs(sub_dir, exist_ok=True)
         prefix = os.path.join(sub_dir, "fragment_length")
         png, pdf = _out(sub_dir, stem="fragment_length")
+        # group_labels already in args from _cmd_qc (set by _cmd_diff/qc path)
         plot_fragment_length(prefix, png, pdf, args)
 
     elif step == 3:
@@ -115,6 +108,7 @@ def plot_dmr(args):
 # ── Fragmentomics ─────────────────────────────────────────────────────────────
 
 def plot_fragmentomics(args, mode):
+    """Visualization dispatcher for fragmentomics sub-analyses."""
     from visualization.plot_fragmentomics import (
         plot_occupancy, plot_delfi, plot_end_motif, plot_cleavage, plot_wps
     )
@@ -126,6 +120,7 @@ def plot_fragmentomics(args, mode):
         for tsv in tsv_files:
             stem = os.path.splitext(os.path.basename(tsv))[0].replace(".occupancy", "")
             png, pdf = _out(out_dir, stem=f"{stem}_occupancy")
+            #plot_occupancy(tsv, png, pdf)
 
     elif mode == "delfi":
         import glob
@@ -133,11 +128,13 @@ def plot_fragmentomics(args, mode):
         group_labels = getattr(args, "group_labels", {})
         tsv_files    = sorted(glob.glob(os.path.join(out_dir, "*_delfi.tsv")))
 
+        # per-sample plots
         for tsv in tsv_files:
             stem = os.path.splitext(os.path.basename(tsv))[0]
             png, pdf = _out(out_dir, stem=f"{stem}_genome")
             plot_delfi(tsv, png, pdf)
 
+        # per-group mean + comparison (need group_labels)
         if group_labels and len(tsv_files) > 1:
             from visualization.plot_fragmentomics import plot_delfi_group
             name_to_tsv = {
@@ -150,6 +147,7 @@ def plot_fragmentomics(args, mode):
                 if grp_tsvs:
                     png, pdf = _out(out_dir, stem=f"delfi_{grp}")
                     plot_delfi_group(grp_tsvs, png, pdf, label=grp)
+            # comparison: one line per group
             grp_means = {}
             for grp, col_names in group_labels.items():
                 grp_tsvs = [name_to_tsv[n] for n in col_names if n in name_to_tsv]
@@ -166,17 +164,19 @@ def plot_fragmentomics(args, mode):
         group_labels = getattr(args, "group_labels", {})
         tsv_files    = sorted(glob.glob(os.path.join(out_dir, "*mer.tsv")))
 
+        # per-sample plots
         for tsv in tsv_files:
             stem = os.path.splitext(os.path.basename(tsv))[0]
             png, pdf = _out(out_dir, stem=f"{stem}_top20")
             plot_end_motif(tsv, png, pdf, n=20)
 
+        # per-group mean barplot
         if group_labels and len(tsv_files) > 1:
             from visualization.plot_fragmentomics import plot_end_motif_group
+            # strip .markdup and k-mer suffix (e.g. Control_1.markdup_4mer → Control_1)
             import re as _re
             name_to_tsv = {
-                _re.sub(r"\.markdup|_\d+mer$",
-                        "", os.path.splitext(os.path.basename(t))[0]): t
+                _re.sub(r"\.markdup|_\d+mer$", "", os.path.splitext(os.path.basename(t))[0]): t
                 for t in tsv_files
             }
             for grp, col_names in group_labels.items():
@@ -194,12 +194,16 @@ def plot_fragmentomics(args, mode):
         up           = getattr(args, "upstream", 1500)
         dn           = getattr(args, "downstream", 1500)
 
-        if bw_files and bed:
+        if not (bw_files and bed):
+            pass
+        else:
             name_to_bw = {
                 os.path.splitext(os.path.basename(b))[0]
                   .replace("_cleavage", "").replace(".markdup", ""): b
                 for b in bw_files
             }
+
+            # Figure 1: all samples per group (one plot per group)
             for grp, col_names in group_labels.items():
                 grp_bws    = [name_to_bw[n] for n in col_names if n in name_to_bw]
                 grp_labels = [n for n in col_names if n in name_to_bw]
@@ -208,6 +212,8 @@ def plot_fragmentomics(args, mode):
                     plot_cleavage(grp_bws, bed, png, pdf,
                                   upstream=up, downstream=dn,
                                   labels=grp_labels)
+
+            # Figure 2: one mean line per group comparison
             if len(group_labels) >= 2:
                 from visualization.plot_fragmentomics import plot_cleavage_comparison
                 grp_bw_dict = {}
@@ -228,7 +234,6 @@ def plot_fragmentomics(args, mode):
             stem = os.path.splitext(os.path.basename(tsv))[0]
             png, pdf = _out(out_dir, stem=f"{stem}_profile")
             plot_wps(tsv, png, pdf)
-
 
 # ── MESA ──────────────────────────────────────────────────────────────────────
 

@@ -262,8 +262,9 @@ def _qc_table(scores_tsv: str) -> str:
     ths = (
         f'<th style="{th_style}text-align:left;min-width:130px;" onclick="qcSort(0)">Sample</th>'
         f'<th style="{th_style}text-align:center;" onclick="qcSort(1)">Status</th>'
+        f'<th style="{th_style}text-align:center;min-width:120px;" onclick="qcSort(2)">Score</th>'
     )
-    rule_col_map, col_idx = [], 2
+    rule_col_map, col_idx = [], 3
     for rule in active_rules:
         val_col = f"{rule.col}_value"
         st_col  = f"{rule.col}_status"
@@ -294,6 +295,10 @@ def _qc_table(scores_tsv: str) -> str:
             f'<td style="text-align:center;padding:6px 8px;" data-sort="{status}">'
             f'{_badge(status)}</td>'
         )
+        td_sc = (
+            f'<td style="text-align:center;padding:6px 8px;" data-sort="{score}">'
+            f'{_score_bar(score, status)}</td>'
+        )
         metric_tds = "".join(
             _cell(row.get(val_col, float("nan")), str(row.get(st_col, "NA")),
                   rule.fmt, rule.unit)
@@ -304,7 +309,7 @@ def _qc_table(scores_tsv: str) -> str:
             f'style="cursor:pointer;border-top:1px solid var(--rule);" '
             f'onmouseover="this.style.background=\'var(--bg2)\'" '
             f'onmouseout="this.style.background=\'\'">'
-            f'{td_s}{td_st}{metric_tds}</tr>'
+            f'{td_s}{td_st}{td_sc}{metric_tds}</tr>'
             f'<tr id="qcrec_row_{sk}" style="display:none;">'
             f'<td colspan="{col_idx}" style="padding:0 12px 10px;">'
             f'<div style="padding:10px 14px;margin-top:4px;'
@@ -679,9 +684,9 @@ def _sec_sample_statistics(rd, groups):
     # header styles — sticky, NOT all-caps
     th = ("padding:9px 12px;background:var(--header-bg);color:var(--header-ink);"
           "font-size:14px;font-weight:700;letter-spacing:.01em;white-space:nowrap;"
-          "border-bottom:2px solid var(--rule);position:sticky;top:28px;z-index:2;")
-    grp_th = ("padding:0 12px;height:28px;background:var(--header-bg);"
-              "color:var(--header-accent);font-size:15px;letter-spacing:.02em;"
+          "border-bottom:2px solid var(--rule);position:sticky;top:26px;z-index:2;")
+    grp_th = ("padding:0 12px;height:26px;background:var(--header-bg);"
+              "color:var(--header-accent);font-size:13px;letter-spacing:.02em;"
               "font-weight:700;text-align:center;border-bottom:1px solid var(--rule);"
               "position:sticky;top:0;z-index:3;")
 
@@ -728,8 +733,8 @@ def _sec_sample_statistics(rd, groups):
         gi     = grp_index.get(grp, 0)
 
         td_sample = (f'<td style="padding:6px 12px;color:var(--ink);font-size:15px;'
-                     f'font-weight:600;text-align:center;white-space:nowrap;">{sample}</td>')
-        td_grp    = f'<td style="padding:6px 12px;text-align:center;">{_grp_chip(grp, gi) if grp else "—"}</td>'
+                     f'font-weight:600;white-space:nowrap;">{sample}</td>')
+        td_grp    = f'<td style="padding:6px 12px;">{_grp_chip(grp, gi) if grp else "—"}</td>'
 
         seq_tds = ""
         for j, (_, vc, _, _, _) in enumerate(seq_cols):
@@ -1075,6 +1080,10 @@ def _sec_process(rd, groups=None, all_sample_names=None):
       <p style="font-size:15.5px;color:#000000;margin-bottom:14px;">
         FastQC quality metrics on trimmed reads.
       </p>
+      {_note(
+        "Hover over any line to see the sample name.",
+        kind="info"
+    )}
       {_coll("Sequence Counts",              fqc_counts,   open_=True)}
       {_coll("Sequence Quality Histograms",  fqc_qual,     open_=False)}
       {_coll("Per Sequence Quality Scores",  fqc_seq_qual, open_=False)}
@@ -1111,56 +1120,6 @@ def _sec_process(rd, groups=None, all_sample_names=None):
     </section>"""
 
 
-def _plotly_select_render(key: str, label_text: str, menu_field: str,
-                          height: int = 460, square: bool = False) -> str:
-    """
-    Render a Plotly chart from window.__CFTK_DATA__[key] with a DELFI-style HTML
-    <select> control above it (instead of a native Plotly dropdown). The fig must
-    carry `menu_field` = {"options": [{"label", "visible":[...], "relayout":{...}}]}.
-    Selecting an option restyles trace visibility and applies any relayout updates.
-    """
-    div_id = f"plotly_{key}"
-    sel_id = f"sel_{key}"
-    tag_end = "</scr" + "ipt>"
-    container = "max-width:680px;margin:0 auto;" if square else "width:100%;"
-    chart_h = "aspect-ratio:1/1;" if square else f"min-height:{height}px;"
-    controls = (
-        '<div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">'
-        f'<label style="font-size:14.5px;font-weight:500;color:#000000;'
-        f'font-family:var(--mono);">{label_text}</label>'
-        f'<select id="{sel_id}" style="font-size:14.5px;padding:4px 10px;'
-        f'border:1px solid var(--rule);border-radius:4px;background:white;'
-        f'color:#000000;cursor:pointer;"></select>'
-        '</div>'
-    )
-    chart = (f'<div style="{container}"><div id="{div_id}" '
-             f'style="width:100%;{chart_h}"></div></div>')
-    js = (
-        '<script>(function(){'
-        f'var fig=(window.__CFTK_DATA__||{{}})["{key}"];'
-        f'var el=document.getElementById("{div_id}");var sel=document.getElementById("{sel_id}");'
-        f'if(!fig){{el.innerHTML="<p style=\'color:#999;padding:20px;\'>Chart data not available for key: {key}</p>";if(sel)sel.style.display="none";return;}}'
-        'if(fig._missing){el.innerHTML="<div style=\'padding:14px 16px;background:var(--bg2);border:1px solid var(--rule);border-radius:8px;font-size:15.5px;color:#000000;\'>\u26a0 "+(fig.layout&&fig.layout.title&&fig.layout.title.text||"Data not available")+"</div>";if(sel)sel.style.display="none";return;}'
-        f'var menu=fig["{menu_field}"];var opts=(menu&&menu.options)||[];'
-        'if(!opts.length){if(sel)sel.style.display="none";}'
-        'opts.forEach(function(o,i){var op=document.createElement("option");op.value=i;op.textContent=o.label;sel.appendChild(op);});'
-        'var layout=Object.assign({},fig.layout);'
-        + ('layout.autosize=true;layout.height=undefined;layout.width=undefined;' if square else '')
-        + f'setTimeout(function(){{'
-        + f'Plotly.newPlot("{div_id}",fig.data,layout,{{responsive:true,displayModeBar:true,modeBarButtonsToRemove:["lasso2d","select2d"]}});'
-        + 'if(sel&&opts.length){sel.addEventListener("change",function(){'
-        + 'var o=opts[this.value];if(!o)return;'
-        + 'var idx=o.visible.map(function(_,i){return i;});'
-        + f'Plotly.restyle("{div_id}",{{visible:o.visible}},idx);'
-        + f'if(o.relayout)Plotly.relayout("{div_id}",o.relayout);'
-        + '});}'
-        + f'}},0);'
-        + '})();'
-        + tag_end
-    )
-    return controls + chart + js
-
-
 def _plotly_from_data(key: str, height: int = 400, square: bool = False) -> str:
     """Render a Plotly chart from window.__CFTK_DATA__[key]."""
     div_id = f"plotly_{key}"
@@ -1193,36 +1152,31 @@ def _plotly_from_data(key: str, height: int = 400, square: bool = False) -> str:
 
 
 def _frag_render() -> str:
-    """Fragment length chart — fills its parent box. Per-sample traces are kept
-    but hidden (and removed from the legend); clicking a sample row in the side
-    table toggles that sample's line on the chart via window.fragToggleSample."""
+    """Fragment length — square container, no peak line, setTimeout for perf."""
     div_id = "plotly_fragment_length"
     tag_end = "</scr" + "ipt>"
     return (
-        '<div style="width:100%;height:100%;">'
-        f'<div id="{div_id}" style="width:100%;height:100%;min-height:380px;"></div>'
+        '<div style="max-width:640px;aspect-ratio:1/1;margin:0 auto;">'
+        f'<div id="{div_id}" style="width:100%;height:100%;"></div>'
         '</div>'
         '<script>(function(){'
         'var fig=(window.__CFTK_DATA__||[])["fragment_length"];'
         + f'var el=document.getElementById("{div_id}");'
         + 'if(!fig){el.innerHTML="<p style=\'color:#999;padding:20px;\'>Fragment length data not available</p>";return;}'
         + 'if(fig._missing){el.innerHTML="<div style=\'padding:14px;background:var(--bg2);border:1px solid var(--rule);border-radius:8px;font-size:15.5px;color:#000000;\'>\u26a0 "+(fig.layout&&fig.layout.title&&fig.layout.title.text||"Data not available")+"</div>";return;}'
-        # copy traces; hide per-sample traces + drop them from the legend; map sample name -> trace index
-        + 'var data=(fig.data||[]).map(function(t){return Object.assign({},t);});'
-        + 'var sidx={};'
-        + 'data.forEach(function(t,i){if(t.legendgroup==="samples"){t.visible=false;t.showlegend=false;var nm=(t.name||"").split(" (")[0];sidx[nm]=i;}});'
         + 'var layout=Object.assign({},fig.layout);delete layout._trace_peaks;'
         + 'layout.autosize=true;layout.height=undefined;layout.width=undefined;'
         + f'setTimeout(function(){{'
-        + f'Plotly.newPlot("{div_id}",data,layout,{{responsive:true,displayModeBar:true,modeBarButtonsToRemove:["lasso2d","select2d"]}});'
-        + f'window.__fragGraph=document.getElementById("{div_id}");window.__fragSampleIdx=sidx;'
-        + 'window.fragToggleSample=function(name,rowEl){'
-        + 'var gd=window.__fragGraph;var idx=window.__fragSampleIdx?window.__fragSampleIdx[name]:null;'
-        + 'if(!gd||idx==null)return;'
-        + 'var on=!(gd.data[idx].visible===true);'
-        + 'Plotly.restyle(gd,{visible:on?true:false},[idx]);'
-        + 'if(rowEl){rowEl.setAttribute("data-active",on?"1":"0");rowEl.style.background=on?"rgba(11,110,153,.10)":"";}'
-        + '};'
+        + f'Plotly.newPlot("{div_id}",fig.data,layout,{{responsive:true,displayModeBar:true,modeBarButtonsToRemove:["lasso2d","select2d"]}});'
+        + f'var g=document.getElementById("{div_id}");'
+        + f'g.on("plotly_legendclick",function(d){{'
+        + f'var n=d.curveNumber;var ts=d.data;var cv=ts[n].visible;'
+        + f'var vs=cv===true||cv===undefined?ts.map(function(t){{return(t.legendgroup==="samples")?"legendonly":true;}}):'
+        + f'ts.map(function(t,i){{return i===n?true:"legendonly";}});'
+        + f'Plotly.restyle("{div_id}","visible",vs);return false;}});'
+        + f'g.on("plotly_legenddoubleclick",function(d){{'
+        + f'var vs=d.data.map(function(t){{return(t.legendgroup==="samples")?"legendonly":true;}});'
+        + f'Plotly.restyle("{div_id}","visible",vs);return false;}});'
         + f'}},0);'
         + '})();'
         + tag_end
@@ -1337,63 +1291,6 @@ def _beta_density_table(scores_tsv: str, table_height: int = 420):
     return (note_html, table_html)
 
 
-def _fragment_peak_table(rd, groups, table_height: int = 420):
-    """
-    Per-sample fragment-length peak table (Sample | Peak site), styled and
-    behaving exactly like the β M-score table (sticky centered header, hover
-    rows, fixed-height scroll). Returns table HTML, or a _missing message.
-    Peak sites come from _fragment_peaks (2_qc/2_fragment_length/*.raw.csv).
-    """
-    samples = [s for m in groups.values() for s in m]
-    peaks = _fragment_peaks(rd, samples)
-    if not peaks:
-        return _missing(
-            "Fragment-length peaks not found — run <code>cftk qc -s 2</code> "
-            "to populate per-sample fragment length data."
-        )
-
-    th_s = (
-        "padding:8px 12px;background:var(--header-bg);color:var(--header-ink);"
-        "font-size:14px;font-weight:700;letter-spacing:.01em;white-space:nowrap;"
-        "border-bottom:2px solid var(--rule);position:sticky;top:0;z-index:2;"
-    )
-    ths = (
-        f'<th style="{th_s}text-align:center;">Sample</th>'
-        f'<th style="{th_s}text-align:center;">Peak site</th>'
-    )
-
-    tbody = ""
-    for g, members in groups.items():
-        for s in members:
-            p = peaks.get(s)
-            val = f"{p} bp" if p else "—"
-            td_s = (
-                f'<td style="padding:6px 12px;font-family:var(--mono);font-size:14.5px;'
-                f'white-space:nowrap;text-align:center;" data-sort="{s}">{s}</td>'
-            )
-            td_p = (
-                f'<td style="text-align:center;padding:6px 8px;font-size:15.5px;'
-                f'color:var(--ink);">{val}</td>'
-            )
-            # clickable row: toggles this sample's line on the chart; active rows
-            # keep an accent tint that survives hover in/out.
-            tbody += (
-                f'<tr data-active="0" style="border-top:1px solid var(--rule);cursor:pointer;"'
-                f' onclick="window.fragToggleSample&&window.fragToggleSample(\'{s}\',this)"'
-                f' onmouseover="if(this.getAttribute(\'data-active\')!==\'1\')this.style.background=\'var(--bg2)\'"'
-                f' onmouseout="if(this.getAttribute(\'data-active\')!==\'1\')this.style.background=\'\'">'
-                f'{td_s}{td_p}</tr>'
-            )
-
-    return (
-        f'<div style="height:{table_height}px;overflow:auto;'
-        'border:1px solid var(--rule);border-radius:8px;">'
-        '<table style="width:100%;border-collapse:collapse;font-size:15.5px;">'
-        f'<thead><tr>{ths}</tr></thead><tbody>{tbody}</tbody></table>'
-        '</div>'
-    )
-
-
 def _sec_qc(rd: str, groups: dict | None = None) -> str:
     groups = groups or {}
 
@@ -1415,9 +1312,7 @@ def _sec_qc(rd: str, groups: dict | None = None) -> str:
         'Select modality from dropdown. Hover points for sample names.</p>'
     )
     pca_block = _coll("PCA plot",
-                      pca_desc + _plotly_select_render("pca", "Modality:",
-                                                       "_modality_menu",
-                                                       height=460, square=True),
+                      pca_desc + _plotly_from_data("pca", height=460, square=True),
                       open_=True)
 
     # Pre-compute collapsible blocks to avoid f-string nesting issues
@@ -1443,30 +1338,13 @@ def _sec_qc(rd: str, groups: dict | None = None) -> str:
     )
     meth_block = _coll("β-value density plot", meth_row + beta_note, open_=True)
 
-    frag_table = _fragment_peak_table(rd, groups, table_height=_BETA_H)
-    frag_left = (
-        f'<div style="flex:1 1 58%;min-width:320px;">'
-        f'<div class="fig-card" style="height:{_BETA_H}px;display:flex;'
-        f'flex-direction:column;margin:0;">'
-        f'<div style="flex:1;min-height:0;">{frag_chart}</div>'
-        f'</div></div>'
-    )
-    frag_right = (
-        f'<div style="flex:1 1 38%;min-width:280px;">{frag_table}</div>'
-        if frag_table else ""
-    )
-    frag_row = (
-        f'<div style="display:flex;gap:18px;align-items:stretch;flex-wrap:wrap;">'
-        f'{frag_left}{frag_right}</div>'
-    )
     frag_desc = (
-        '<p style="font-size:14.5px;color:#000000;margin-top:14px;margin-bottom:8px;">'
-        'Group mean traces are shown by default (x-axis: 50–250 bp). '
-        '<strong>Click a sample in the table</strong> to show its fragment-length line '
-        'on the chart (click again to hide); active samples are highlighted. '
-        'Hover the chart for exact values.</p>'
+        '<p style="font-size:14.5px;color:#000000;margin-bottom:8px;">'
+        'Group mean traces visible by default (x-axis: 50–250 bp). '
+        '<strong>Click a legend item</strong> to isolate that sample/group; '
+        'double-click to show all. Hover for exact values.</p>'
     )
-    frag_block = _coll("Fragment length plot", frag_row + frag_desc, open_=True)
+    frag_block = _coll("Fragment length plot", frag_desc + frag_chart, open_=True)
 
     dinuc_desc = (
         '<p style="font-size:14.5px;color:#000000;margin-bottom:8px;">'
@@ -1740,8 +1618,7 @@ def _sec_fragmentomics(rd, groups):
             f'<div style="margin-bottom:6px;font-size:14.5px;font-weight:500;'
             f'color:#000000;font-family:var(--mono)">{grp}</div>'
         )
-        em_charts += _plotly_select_render(f"end_motif_{grp}", "Sample:",
-                                            "_sample_menu", height=440)
+        em_charts += _plotly_from_data(f"end_motif_{grp}", height=440)
     if not em_charts:
         em_charts = "<p><em>No end-motif results.</em></p>"
 
