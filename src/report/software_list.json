@@ -1,0 +1,160 @@
+{
+  "_comment": "Bioinformatics tools used by the cftk cfDNA methylation pipeline. Edit versions/citations as needed. This file is loaded by report_generator._sec_software().",
+  "categories": [
+    {
+      "stage": "Quality Control & Trimming",
+      "tools": [
+        {
+          "name": "FastQC",
+          "version": "0.12.1",
+          "purpose": "Per-base sequence quality, GC content, adapter, and duplication QC of raw and trimmed reads.",
+          "url": "https://www.bioinformatics.babraham.ac.uk/projects/fastqc/"
+        },
+        {
+          "name": "Trim Galore",
+          "version": "0.6.10",
+          "purpose": "Adapter and quality trimming of paired-end reads (wraps Cutadapt + FastQC).",
+          "url": "https://github.com/FelixKrueger/TrimGalore"
+        },
+        {
+          "name": "Cutadapt",
+          "version": "4.9",
+          "purpose": "Adapter sequence removal (invoked by Trim Galore).",
+          "url": "https://cutadapt.readthedocs.io/"
+        },
+        {
+          "name": "MultiQC",
+          "version": "1.25",
+          "purpose": "Aggregates FastQC, Trim Galore, and samtools metrics into per-step QC reports.",
+          "url": "https://multiqc.info/"
+        }
+      ]
+    },
+    {
+      "stage": "Alignment & Deduplication",
+      "tools": [
+        {
+          "name": "bwa-meth",
+          "version": "0.2.7",
+          "purpose": "Bisulfite-aware read alignment to the reference genome.",
+          "url": "https://github.com/brentp/bwa-meth"
+        },
+        {
+          "name": "BWA",
+          "version": "0.7.18",
+          "purpose": "Core Burrows-Wheeler alignment engine used by bwa-meth.",
+          "url": "https://github.com/lh3/bwa"
+        },
+        {
+          "name": "SAMtools",
+          "version": "1.22.1",
+          "purpose": "BAM sorting, indexing, flagstat, and stats (mapping rate, insert size, error rate).",
+          "url": "https://www.htslib.org/"
+        },
+        {
+          "name": "Sambamba",
+          "version": "1.0.1",
+          "purpose": "Duplicate marking and removal on aligned BAM files.",
+          "url": "https://lomereiter.github.io/sambamba/"
+        }
+      ]
+    },
+    {
+      "stage": "Methylation Extraction",
+      "tools": [
+        {
+          "name": "MethylDackel",
+          "version": "0.6.1",
+          "purpose": "Per-CpG methylation calling, CHH context extraction (bisulfite conversion QC), and M-bias estimation.",
+          "url": "https://github.com/dpryan79/MethylDackel"
+        },
+        {
+          "name": "BEDTools",
+          "version": "2.31.1",
+          "purpose": "Fragment extraction (bamtobed), genomic interval operations, and dinucleotide nucleotide content (nuc).",
+          "url": "https://bedtools.readthedocs.io/"
+        }
+      ]
+    },
+    {
+      "stage": "Quality Control Analysis",
+      "tools": [
+        {
+          "name": "deepTools",
+          "version": "3.5.5",
+          "purpose": "Fragment length distribution via bamPEFragmentSize.",
+          "url": "https://deeptools.readthedocs.io/"
+        }
+      ]
+    },
+    {
+      "stage": "Differential Methylation",
+      "tools": [
+        {
+          "name": "metilene",
+          "version": "0.2-8",
+          "purpose": "De novo differentially methylated region (DMR) detection.",
+          "url": "https://www.bioinf.uni-leipzig.de/Software/metilene/"
+        },
+        {
+          "name": "annotatr",
+          "version": "1.32.0",
+          "purpose": "Genomic annotation of DMRs (gene symbol, region type: promoter/intron/exon/CpG island).",
+          "url": "https://bioconductor.org/packages/annotatr/"
+        },
+        {
+          "name": "R",
+          "version": "4.4.1",
+          "purpose": "Statistical environment for DMR annotation and downstream analysis.",
+          "url": "https://www.r-project.org/"
+        }
+      ]
+    },
+    {
+      "stage": "Fragmentomics & Modeling",
+      "tools": [
+        {
+          "name": "scikit-learn",
+          "version": "1.5.2",
+          "purpose": "PCA, classifiers (RandomForest, LogisticRegression, SVC), and LOOCV for MESA multimodal modeling.",
+          "url": "https://scikit-learn.org/"
+        },
+        {
+          "name": "NumPy",
+          "version": "2.1.2",
+          "purpose": "Numerical computation across all analysis steps.",
+          "url": "https://numpy.org/"
+        },
+        {
+          "name": "pandas",
+          "version": "2.2.3",
+          "purpose": "Tabular data handling and matrix operations.",
+          "url": "https://pandas.pydata.org/"
+        },
+        {
+          "name": "SciPy",
+          "version": "1.14.1",
+          "purpose": "Statistical tests, KDE density estimation, and Spearman correlation.",
+          "url": "https://scipy.org/"
+        }
+      ]
+    },
+    {
+      "stage": "Visualization & Reporting",
+      "tools": [
+        {
+          "name": "Matplotlib",
+          "version": "3.9.2",
+          "purpose": "Static figure generation (methylation distribution, violin, heatmap, ROC, etc.).",
+          "url": "https://matplotlib.org/"
+        },
+        {
+          "name": "Plotly.js",
+          "version": "2.35.2",
+          "purpose": "Interactive charts embedded in this HTML report.",
+          "url": "https://plotly.com/javascript/"
+        }
+      ]
+    }
+  ]
+}
