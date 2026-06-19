@@ -1,12 +1,33 @@
 """
 process.py — Part 1 raw data processing.
 Steps: 1=trimming  2=alignment  3=markdup  4=methylation
-Each step creates its own output directory at runtime.
-Step 4 auto-merges cpg_matrix.tsv when >1 sample succeeds.
-Supports parallel_samples: run N samples simultaneously per step.
+
+Fixes vs previous version:
+  - _step1_trim(): after Trim Galore runs, ALL output files are renamed to
+    a consistent R1/R2 convention:
+      {name}_val_1.fq.gz        → {name}_R1.fq.gz
+      {name}_val_2.fq.gz        → {name}_R2.fq.gz
+      {name}_val_1_fastqc.zip   → {name}_R1_fastqc.zip
+      {name}_val_2_fastqc.zip   → {name}_R2_fastqc.zip
+      (trimming reports already renamed correctly)
+    The "Input filename:" line inside each trimming report is also rewritten
+    to the sample name so MultiQC can merge all metrics into one row per sample.
+
+  - _run_step1(): checkpoint now recognises both old val_1/val_2 and new R1/R2
+    naming so already-trimmed samples are not re-processed.
+
+  - _run_step2(): reads trimmed FASTQs using R1/R2 names first,
+    falls back to val_1/val_2 for backward compatibility.
+
+  - _run_multiqc(): step 1 now auto-generates a replace_names.tsv that maps
+    original FASTQ stems → sample R1/R2 names, so MultiQC displays unified
+    sample names across trimming reports and FastQC modules.
+
+  - P1: sambamba markdup stderr captured to {name}.markdup_metrics.txt.
 """
 
 import os
+import re
 import sys
 from joblib import Parallel, delayed
 from util import disp, run_command
@@ -40,54 +61,94 @@ def _step1_trim(sample, step_cfg, ref_data, paths, per_cores):
     out   = paths["trimming"]
     os.makedirs(out, exist_ok=True)
 
+    # Determine extension from input
+    ext = "fq.gz" if sample["r1"].endswith(".gz") else "fq"
+
     if tool == "trim_galore":
         cmd = (
             f"trim_galore --paired --2colour 20 --cores {per_cores} "
-            f"--fastqc "  # generate FastQC reports for MultiQC
+            f"--fastqc "
             f"-o {out} --basename {name} {extra} "
             f"{sample['r1']} {sample['r2']} || exit 1"
         )
-    elif tool == "fastp":
-        ext    = "fq.gz" if sample["r1"].endswith(".gz") else "fq"
-        r1_out = os.path.join(out, f"{name}_val_1.{ext}")
-        r2_out = os.path.join(out, f"{name}_val_2.{ext}")
-        cmd = (
-            f"fastp -i {sample['r1']} -I {sample['r2']} "
-            f"-o {r1_out} -O {r2_out} -w {per_cores} {extra} || exit 1"
-        )
-    else:
-        sys.exit(f"[step1] unsupported tool: {tool}. Supported: {SUPPORTED_TOOLS[1]}")
+        run_command(cmd, label=f"trim [{name}]")
 
-    run_command(cmd, label=f"trim [{name}]")
-    ext    = "fq.gz" if sample["r1"].endswith(".gz") else "fq"
-    r1_out = os.path.join(out, f"{name}_val_1.{ext}")
-    r2_out = os.path.join(out, f"{name}_val_2.{ext}")
+        # ── Unified rename: all outputs → R1/R2 convention ────────────────
+        # 1. Extract original FASTQ base names (for trimming report matching)
+        r1_base = os.path.splitext(os.path.splitext(
+            os.path.basename(sample["r1"]))[0])[0]
+        r2_base = os.path.splitext(os.path.splitext(
+            os.path.basename(sample["r2"]))[0])[0]
 
-    if tool == "trim_galore":
-        # Trim Galore names reports after the input fastq filename.
-        # Rename all report/fastqc files to use sample name instead.
-        import glob as _glob
-        r1_base = os.path.splitext(os.path.splitext(os.path.basename(sample["r1"]))[0])[0]
-        r2_base = os.path.splitext(os.path.splitext(os.path.basename(sample["r2"]))[0])[0]
         rename_map = [
-            # trimming reports
+            # Trimming reports — Trim Galore names after the INPUT file
+            # Try multiple possible patterns (fastq.gz vs fq.gz)
             (f"{r1_base}.fastq.gz_trimming_report.txt", f"{name}_R1_trimming_report.txt"),
             (f"{r2_base}.fastq.gz_trimming_report.txt", f"{name}_R2_trimming_report.txt"),
+            (f"{r1_base}.fq.gz_trimming_report.txt",    f"{name}_R1_trimming_report.txt"),
+            (f"{r2_base}.fq.gz_trimming_report.txt",    f"{name}_R2_trimming_report.txt"),
             (f"{r1_base}_trimming_report.txt",           f"{name}_R1_trimming_report.txt"),
             (f"{r2_base}_trimming_report.txt",           f"{name}_R2_trimming_report.txt"),
-            # fastqc reports (zip + html)
+            # FastQC files — Trim Galore names after the --basename output
             (f"{name}_val_1_fastqc.zip",  f"{name}_R1_fastqc.zip"),
             (f"{name}_val_1_fastqc.html", f"{name}_R1_fastqc.html"),
             (f"{name}_val_2_fastqc.zip",  f"{name}_R2_fastqc.zip"),
             (f"{name}_val_2_fastqc.html", f"{name}_R2_fastqc.html"),
+            # Trimmed FASTQ files — rename val_1/val_2 → R1/R2
+            (f"{name}_val_1.{ext}", f"{name}_R1.{ext}"),
+            (f"{name}_val_2.{ext}", f"{name}_R2.{ext}"),
         ]
+
         for old_name, new_name in rename_map:
             old_path = os.path.join(out, old_name)
             new_path = os.path.join(out, new_name)
-            if os.path.exists(old_path) and not os.path.exists(new_path):
-                os.rename(old_path, new_path)
-                disp(f"  [trim] renamed: {old_name} → {new_name}")
+            if os.path.exists(old_path):
+                if os.path.exists(new_path):
+                    # new already exists (e.g. from a previous run): remove old
+                    os.remove(old_path)
+                else:
+                    os.rename(old_path, new_path)
+                    disp(f"  [trim] renamed: {old_name} → {new_name}")
 
+        # ── Rewrite "Input filename:" in trimming reports ─────────────────
+        # MultiQC reads this field (not the file name) to determine sample name.
+        # Replace the original FASTQ path with the cftk sample name so MultiQC
+        # merges trimming-report metrics with FastQC metrics into one row.
+        for report_name, new_stem in [
+            (f"{name}_R1_trimming_report.txt", f"{name}_R1"),
+            (f"{name}_R2_trimming_report.txt", f"{name}_R2"),
+        ]:
+            report_path = os.path.join(out, report_name)
+            if os.path.exists(report_path):
+                try:
+                    with open(report_path, "r", encoding="utf-8", errors="replace") as f:
+                        content = f.read()
+                    # Replace "Input filename: /any/path/to/original.fq.gz"
+                    new_content = re.sub(
+                        r"(?m)^(Input filename:).*$",
+                        rf"\1 {new_stem}",
+                        content,
+                    )
+                    if new_content != content:
+                        with open(report_path, "w", encoding="utf-8") as f:
+                            f.write(new_content)
+                        disp(f"  [trim] updated Input filename → {new_stem} in {report_name}")
+                except Exception as e:
+                    disp(f"  [trim] WARNING: could not patch {report_name}: {e}")
+
+    elif tool == "fastp":
+        r1_out = os.path.join(out, f"{name}_R1.{ext}")
+        r2_out = os.path.join(out, f"{name}_R2.{ext}")
+        cmd = (
+            f"fastp -i {sample['r1']} -I {sample['r2']} "
+            f"-o {r1_out} -O {r2_out} -w {per_cores} {extra} || exit 1"
+        )
+        run_command(cmd, label=f"trim [{name}]")
+    else:
+        sys.exit(f"[step1] unsupported tool: {tool}. Supported: {SUPPORTED_TOOLS[1]}")
+
+    r1_out = os.path.join(out, f"{name}_R1.{ext}")
+    r2_out = os.path.join(out, f"{name}_R2.{ext}")
     return r1_out, r2_out
 
 
@@ -119,7 +180,6 @@ def _step2_align(sample, r1, r2, step_cfg, ref_data, paths, per_cores):
         sys.exit(f"[step2] unsupported tool: {tool}. Supported: {SUPPORTED_TOOLS[2]}")
 
     run_command(cmd, label=f"align [{name}]")
-    # generate samtools flagstat + stats for MultiQC
     run_command(
         f"samtools flagstat -@ {per_cores} {bam} > {bam}.flagstat",
         label=f"flagstat [{name}]"
@@ -132,17 +192,20 @@ def _step2_align(sample, r1, r2, step_cfg, ref_data, paths, per_cores):
 
 
 def _step3_markdup(sample, bam_in, step_cfg, ref_data, paths, per_cores):
-    tool  = step_cfg["tool"]
-    extra = step_cfg["params"].get("extra_args", "")
-    ref   = ref_data["genome_fa"]
-    name  = sample["name"]
-    out   = paths["markdup"]
+    tool    = step_cfg["tool"]
+    extra   = step_cfg["params"].get("extra_args", "")
+    ref     = ref_data["genome_fa"]
+    name    = sample["name"]
+    out     = paths["markdup"]
     os.makedirs(out, exist_ok=True)
     bam_out = os.path.join(out, f"{name}.markdup.bam")
 
     if tool == "sambamba":
+        # P1: capture sambamba markdup stderr → {name}.markdup_metrics.txt
+        metrics_txt = os.path.join(out, f"{name}.markdup_metrics.txt")
         cmd = (
-            f"sambamba markdup -t {per_cores} {extra} {bam_in} {bam_out} || exit 1; "
+            f"sambamba markdup -t {per_cores} {extra} {bam_in} {bam_out} "
+            f"2>{metrics_txt} || exit 1; "
             f"samtools index -@ {per_cores} {bam_out} || exit 1"
         )
     elif tool == "picard":
@@ -178,17 +241,66 @@ def _step4_methylation(sample, bam_in, step_cfg, ref_data, paths, per_cores):
     prefix = os.path.join(out, name)
 
     if tool == "methyldackel":
-        # *_mbias.txt is recognised by MultiQC
-        mbias_txt = f"{prefix}_mbias.txt"
+        mbias_txt  = f"{prefix}_mbias.txt"
         mbias_temp = f"{prefix}_mbias_OT_OB.temp"
+        chh_prefix = f"{prefix}_chh"
+        chh_bg     = f"{chh_prefix}_CHH.bedGraph"
+        # P3a: mbias --txt outputs per-position TSV to stdout; OT/OB coords to stderr.
+        #      Use subprocess.run(capture_output=True) instead of shell redirection
+        #      to avoid run_command() interference with stdout (cat: invalid option --h).
+        # P3b: extra CHH extract appended after CpG extract.
+        # run_command() is used for the extract steps (no stdout capture needed).
+        import subprocess as _sp, re as _re
+
+        # Step A: mbias --txt → capture stdout (TSV) and stderr (OT/OB coords)
+        mbias_args = [
+            "MethylDackel", "mbias", "--txt",
+            "-@", str(per_cores),
+            ref, bam_in, prefix,
+        ]
+        disp(f"  [mbias] {name} — running mbias --txt")
+        mbias_proc = _sp.run(mbias_args, capture_output=True, text=True)
+
+        # Write stdout (TSV) to _mbias.txt
+        with open(mbias_txt, "w") as _f:
+            _f.write(mbias_proc.stdout)
+
+        # Write stderr (OT/OB coords) to _mbias_OT_OB.temp
+        with open(mbias_temp, "w") as _f:
+            _f.write(mbias_proc.stderr)
+
+        if mbias_proc.returncode != 0:
+            disp(f"  [mbias] ERROR (rc={mbias_proc.returncode}): {mbias_proc.stderr[:300]}")
+            import sys as _sys; _sys.exit(f"[step4] mbias failed for {name}")
+
+        # Validate: stdout must start with "Strand" header
+        first_line = mbias_proc.stdout.splitlines()[0] if mbias_proc.stdout.strip() else ""
+        if not first_line.startswith("Strand"):
+            disp(f"  [mbias] WARNING: stdout does not look like --txt TSV "
+                 f"(first line: {first_line[:80]!r})")
+            disp(f"  [mbias] stderr: {mbias_proc.stderr[:200]}")
+
+        # Extract OT/OB from stderr for the extract step
+        ot_ob_m = _re.search(r"--OT\s+(\S+)\s+--OB\s+(\S+)", mbias_proc.stderr)
+        if not ot_ob_m:
+            disp(f"  [mbias] WARNING: could not parse OT/OB from stderr — "
+                 f"running extract without inclusion coordinates")
+            ot_flag = ""
+            ob_flag = ""
+        else:
+            ot_flag = f"--OT {ot_ob_m.group(1)}"
+            ob_flag = f"--OB {ot_ob_m.group(2)}"
+
+        # Step B: CpG extract
         cmd = (
-            f"MethylDackel mbias -@ {per_cores} {ref} {bam_in} {prefix} "
-            f"2>&1 | tee {mbias_txt} > {mbias_temp} || exit 1; "
             f"MethylDackel extract --minDepth {depth} --maxVariantFrac 0.25 "
             f"-@ {per_cores} "
-            f"--OT $(grep -oP '(?<=--OT )[^ ]+' {mbias_temp}) "
-            f"--OB $(grep -oP '(?<=--OB )[^ ]+' {mbias_temp}) "
-            f"-o {prefix} {extra} {ref} {bam_in} || exit 1"
+            f"{ot_flag} {ob_flag} "
+            f"-o {prefix} {extra} {ref} {bam_in} || exit 1; "
+            # P3b: CHH extract (inline checkpoint)
+            f"[ -f {chh_bg} ] || "
+            f"MethylDackel extract --CHH --noCpG --minDepth 1 "
+            f"-@ {per_cores} -o {chh_prefix} {ref} {bam_in} || exit 1"
         )
     elif tool == "bismark_extractor":
         cmd = (
@@ -207,13 +319,6 @@ def _step4_methylation(sample, bam_in, step_cfg, ref_data, paths, per_cores):
 # ── CPG merge (auto after step4) ──────────────────────────────────────────────
 
 def _merge_cpg(bedgraph_files, samples, paths):
-    """
-    Merge per-sample CpG bedGraph files into cpg_matrix.tsv.
-    Uses bedtools unionbedg for coordinate-level merging — avoids duplicate
-    index errors from MethylDackel outputting both strands at the same position.
-    Column names: {group}_{sample_name} so startswith(group) matching works
-    in downstream diff/mesa analysis.
-    """
     import shutil
     import subprocess
     import pandas as pd
@@ -226,7 +331,6 @@ def _merge_cpg(bedgraph_files, samples, paths):
     if bedtools is None:
         sys.exit("[merge] ERROR: bedtools not found in PATH.")
 
-    # col_name = sample["name"] directly (user controls naming in json)
     name_map = {s["name"]: s["name"] for s in samples}
     col_names = []
     for fp in bedgraph_files:
@@ -252,15 +356,12 @@ def _merge_cpg(bedgraph_files, samples, paths):
     if ret.returncode != 0:
         sys.exit("[merge] ERROR: bedtools unionbedg failed.")
 
-    # read tmp, combine chrom+pos → chrom_pos index (e.g. chr1_17378)
     matrix = pd.read_csv(tmp_path, sep="\t")
-    # column 0 is chrom (may be named "chrom" or "chr"), column 1 is pos
     chrom_col = matrix.columns[0]
     pos_col   = matrix.columns[1]
     matrix.index = matrix[chrom_col].astype(str) + "_" + matrix[pos_col].astype(str)
     matrix.index.name = "cpg_id"
     matrix = matrix.drop(columns=[chrom_col, pos_col])
-    # drop duplicate positions (e.g. from both strands or overlapping regions)
     n_before = len(matrix)
     matrix = matrix[~matrix.index.duplicated(keep="first")]
     n_dropped = n_before - len(matrix)
@@ -272,23 +373,101 @@ def _merge_cpg(bedgraph_files, samples, paths):
     return out_path
 
 
-# ── Per-step single-sample runners (used by joblib per step) ─────────────────
+# ── Per-step single-sample runners ────────────────────────────────────────────
 
 def _run_step1(sample, proc, ref, paths, per_cores):
-    """Trimming for one sample. Returns (r1, r2) or (None, None)."""
+    """
+    Trimming checkpoint: recognises both new R1/R2 naming and legacy val_1/val_2,
+    so samples trimmed before the rename fix are not re-processed.
+    """
     name = sample["name"]
     ext  = "fq.gz" if sample.get("r1", "").endswith(".gz") else "fq"
-    r1_done = os.path.join(paths["trimming"], f"{name}_val_1.{ext}")
-    r2_done = os.path.join(paths["trimming"], f"{name}_val_2.{ext}")
-    if os.path.exists(r1_done) and os.path.exists(r2_done):
+
+    # New naming (post-fix)
+    r1_new = os.path.join(paths["trimming"], f"{name}_R1.{ext}")
+    r2_new = os.path.join(paths["trimming"], f"{name}_R2.{ext}")
+    # Legacy naming (pre-fix)
+    r1_old = os.path.join(paths["trimming"], f"{name}_val_1.{ext}")
+    r2_old = os.path.join(paths["trimming"], f"{name}_val_2.{ext}")
+
+    if os.path.exists(r1_new) and os.path.exists(r2_new):
         disp(f"  [step1] {name} — already done, skipping")
-        return r1_done, r2_done
+        return r1_new, r2_new
+
+    if os.path.exists(r1_old) and os.path.exists(r2_old):
+        # Legacy files exist: apply the rename fix now without re-trimming
+        disp(f"  [step1] {name} — legacy val_1/val_2 found, applying rename fix")
+        _apply_trim_rename_fix(sample, paths["trimming"], ext)
+        return (
+            r1_new if os.path.exists(r1_new) else r1_old,
+            r2_new if os.path.exists(r2_new) else r2_old,
+        )
+
     disp(f"  [step1] {name}")
     return _step1_trim(sample, proc["step1_trimming"], ref, paths, per_cores)
 
 
+def _apply_trim_rename_fix(sample, out_dir: str, ext: str):
+    """
+    Apply the rename + trimming-report content fix to an already-trimmed sample
+    without re-running Trim Galore.  Used by _run_step1 when legacy files exist.
+    """
+    name    = sample["name"]
+    r1_base = os.path.splitext(os.path.splitext(
+        os.path.basename(sample["r1"]))[0])[0]
+    r2_base = os.path.splitext(os.path.splitext(
+        os.path.basename(sample["r2"]))[0])[0]
+
+    rename_map = [
+        (f"{r1_base}.fastq.gz_trimming_report.txt", f"{name}_R1_trimming_report.txt"),
+        (f"{r2_base}.fastq.gz_trimming_report.txt", f"{name}_R2_trimming_report.txt"),
+        (f"{r1_base}.fq.gz_trimming_report.txt",    f"{name}_R1_trimming_report.txt"),
+        (f"{r2_base}.fq.gz_trimming_report.txt",    f"{name}_R2_trimming_report.txt"),
+        (f"{r1_base}_trimming_report.txt",           f"{name}_R1_trimming_report.txt"),
+        (f"{r2_base}_trimming_report.txt",           f"{name}_R2_trimming_report.txt"),
+        (f"{name}_val_1_fastqc.zip",  f"{name}_R1_fastqc.zip"),
+        (f"{name}_val_1_fastqc.html", f"{name}_R1_fastqc.html"),
+        (f"{name}_val_2_fastqc.zip",  f"{name}_R2_fastqc.zip"),
+        (f"{name}_val_2_fastqc.html", f"{name}_R2_fastqc.html"),
+        (f"{name}_val_1.{ext}",       f"{name}_R1.{ext}"),
+        (f"{name}_val_2.{ext}",       f"{name}_R2.{ext}"),
+    ]
+    for old_name, new_name in rename_map:
+        old_path = os.path.join(out_dir, old_name)
+        new_path = os.path.join(out_dir, new_name)
+        if os.path.exists(old_path):
+            if os.path.exists(new_path):
+                os.remove(old_path)
+            else:
+                os.rename(old_path, new_path)
+                disp(f"  [trim-fix] renamed: {old_name} → {new_name}")
+
+    # Patch trimming report content
+    for report_name, new_stem in [
+        (f"{name}_R1_trimming_report.txt", f"{name}_R1"),
+        (f"{name}_R2_trimming_report.txt", f"{name}_R2"),
+    ]:
+        report_path = os.path.join(out_dir, report_name)
+        if os.path.exists(report_path):
+            try:
+                with open(report_path, "r", encoding="utf-8", errors="replace") as f:
+                    content = f.read()
+                new_content = re.sub(
+                    r"(?m)^(Input filename:).*$",
+                    rf"\1 {new_stem}",
+                    content,
+                )
+                if new_content != content:
+                    with open(report_path, "w", encoding="utf-8") as f:
+                        f.write(new_content)
+            except Exception as e:
+                disp(f"  [trim-fix] WARNING: could not patch {report_name}: {e}")
+
+
 def _run_step2(sample, proc, ref, paths, per_cores):
-    """Alignment for one sample. Returns bam path, or exits on missing trimmed reads."""
+    """
+    Find trimmed FASTQs using R1/R2 naming first (new), then val_1/val_2 (legacy).
+    """
     name  = sample["name"]
     itype = sample["input_type"]
     disp(f"  [step2] {name}")
@@ -297,19 +476,19 @@ def _run_step2(sample, proc, ref, paths, per_cores):
         disp(f"  [step2] skip — BAM input: {name}")
         return sample.get("bam")
 
-    # trimmed reads must exist — step1 must have run first
     ext = "fq.gz" if sample["r1"].endswith(".gz") else "fq"
-    r1  = os.path.join(paths["trimming"], f"{name}_val_1.{ext}")
-    r2  = os.path.join(paths["trimming"], f"{name}_val_2.{ext}")
 
-    missing = [f for f in [r1, r2] if not os.path.exists(f)]
+    # Resolve R1 path — prefer new R1/R2 naming, fall back to val_1/val_2
+    r1 = _find_trimmed(paths["trimming"], name, "R1", "val_1", ext)
+    r2 = _find_trimmed(paths["trimming"], name, "R2", "val_2", ext)
+
+    missing = [p for p in [r1, r2] if not p or not os.path.exists(p)]
     if missing:
-        msg = (
-            f"[step2] ERROR: trimmed reads not found for '{name}': "
-            + ", ".join(missing)
-            + " — run step 1 (trimming) before step 2."
+        sys.exit(
+            f"[step2] ERROR: trimmed reads not found for '{name}'. "
+            f"Expected {name}_R1.{ext} or {name}_val_1.{ext} in "
+            f"{paths['trimming']}. Run step 1 first."
         )
-        sys.exit(msg)
 
     bam_done = os.path.join(paths["alignment"], f"{name}.bam")
     if os.path.exists(bam_done):
@@ -319,9 +498,20 @@ def _run_step2(sample, proc, ref, paths, per_cores):
                         ref, paths, per_cores)
 
 
+def _find_trimmed(trimming_dir: str, name: str,
+                  new_suffix: str, old_suffix: str, ext: str) -> str:
+    """Return path of trimmed FASTQ, preferring new R1/R2 naming over val_1/val_2."""
+    new_path = os.path.join(trimming_dir, f"{name}_{new_suffix}.{ext}")
+    old_path = os.path.join(trimming_dir, f"{name}_{old_suffix}.{ext}")
+    if os.path.exists(new_path):
+        return new_path
+    if os.path.exists(old_path):
+        return old_path
+    return new_path   # return new_path so error message is informative
+
+
 def _run_step3(sample, proc, ref, paths, per_cores):
-    """Mark duplicates for one sample. Returns markdup bam path."""
-    name    = sample["name"]
+    name     = sample["name"]
     bam_done = os.path.join(paths["markdup"], f"{name}.markdup.bam")
     if os.path.exists(bam_done):
         disp(f"  [step3] {name} — already done, skipping")
@@ -332,23 +522,47 @@ def _run_step3(sample, proc, ref, paths, per_cores):
         disp(f"  [step3] ERROR: BAM not found for {sample['name']}: {bam_in}")
         return None
     return _step3_markdup(sample, bam_in,
-                           proc["step3_markdup"], ref, paths, per_cores)
+                          proc["step3_markdup"], ref, paths, per_cores)
 
 
 def _run_step4(sample, proc, ref, paths, per_cores):
-    """Methylation calling for one sample. Returns bedGraph path or None."""
-    name    = sample["name"]
-    bg_done = os.path.join(paths["methylation"], f"{name}_CpG.bedGraph")
-    if os.path.exists(bg_done):
+    name      = sample["name"]
+    prefix    = os.path.join(paths["methylation"], name)
+    bg_done   = f"{prefix}_CpG.bedGraph"
+    mbias_txt  = f"{prefix}_mbias.txt"
+    mbias_temp = f"{prefix}_mbias_OT_OB.temp"
+
+    # Full checkpoint: all three outputs must exist.
+    # _CpG.bedGraph alone is NOT sufficient — if mbias.txt / mbias_OT_OB.temp
+    # are missing or contain only legacy stderr content, we must re-run.
+    def _mbias_is_legacy(path):
+        """Return True if file exists but has no --txt TSV data (only stderr)."""
+        if not os.path.exists(path) or os.path.getsize(path) == 0:
+            return True
+        try:
+            with open(path) as f:
+                first = f.readline()
+            # --txt TSV starts with "Strand	"; legacy stderr starts with "[" or "Suggested"
+            return not first.strip().startswith("Strand")
+        except OSError:
+            return True
+
+    if (os.path.exists(bg_done)
+            and os.path.exists(mbias_temp)
+            and not _mbias_is_legacy(mbias_txt)):
         disp(f"  [step4] {name} — already done, skipping")
         return bg_done
+
+    if os.path.exists(bg_done):
+        disp(f"  [step4] {name} — CpG bedGraph exists but mbias --txt output missing, re-running")
+
     disp(f"  [step4] {name}")
     bam_in = get_bam(sample, paths)
     if not (bam_in and os.path.exists(bam_in)):
         disp(f"  [step4] ERROR: BAM not found for {sample['name']}: {bam_in}")
         return None
     return _step4_methylation(sample, bam_in,
-                               proc["step4_methylation"], ref, paths, per_cores)
+                              proc["step4_methylation"], ref, paths, per_cores)
 
 
 # ── Step dispatcher ───────────────────────────────────────────────────────────
@@ -361,16 +575,13 @@ _STEP_FN = {
 }
 
 
-# ── Main entry ────────────────────────────────────────────────────────────────
-
-
 # ── MultiQC ──────────────────────────────────────────────────────────────────
 
-# keys must match paths dict from init.py get_work_paths()
-# only steps 1 and 2 produce MultiQC-recognisable output
 _MULTIQC_STEP = {
     1: "trimming",
     2: "alignment",
+    # Step 4 (methylation) intentionally excluded: MethylDackel output is
+    # parsed directly by qc_parser.py; MultiQC adds no value here.
 }
 
 _MULTIQC_TITLE = {
@@ -379,12 +590,35 @@ _MULTIQC_TITLE = {
 }
 
 
-def _run_multiqc(step, paths):
+def _build_replace_names_tsv(samples: list, out_path: str):
     """
-    Run MultiQC on the output directory of a completed step.
-    Results saved to {step_dir}/multiqc/.
-    Silently skips if multiqc is not installed.
+    Write a MultiQC replace-names TSV that maps original FASTQ stems
+    to cftk sample names (e.g. S10000Nr4_R1 → Control_2_R1).
+
+    MultiQC uses the "Input filename:" field inside trimming reports to name
+    samples.  Even after we patch that field, this TSV acts as a safety net
+    so MultiQC can merge all metrics (FastQC + trimming) into one row.
     """
+    rows = ["Search\tReplace"]
+    for s in samples:
+        if s.get("input_type") != "fastq":
+            continue
+        name    = s["name"]
+        r1_base = os.path.splitext(os.path.splitext(
+            os.path.basename(s["r1"]))[0])[0]
+        r2_base = os.path.splitext(os.path.splitext(
+            os.path.basename(s["r2"]))[0])[0]
+        rows.append(f"{r1_base}\t{name}_R1")
+        rows.append(f"{r2_base}\t{name}_R2")
+        # Also map the legacy val_ names in case any remain
+        rows.append(f"{name}_val_1\t{name}_R1")
+        rows.append(f"{name}_val_2\t{name}_R2")
+    with open(out_path, "w") as f:
+        f.write("\n".join(rows) + "\n")
+    disp(f"[multiqc] replace_names.tsv → {out_path}")
+
+
+def _run_multiqc(step, paths, samples=None):
     import shutil
     multiqc = shutil.which("multiqc")
     if not multiqc:
@@ -392,8 +626,8 @@ def _run_multiqc(step, paths):
         return
 
     if step not in _MULTIQC_STEP:
-        return  # no MultiQC for this step
-    step_dir  = paths.get(_MULTIQC_STEP[step], "")
+        return
+    step_dir = paths.get(_MULTIQC_STEP[step], "")
     if not step_dir or not os.path.exists(step_dir):
         disp(f"[multiqc] step {step}: directory not found ({step_dir}), skipping.")
         return
@@ -401,21 +635,39 @@ def _run_multiqc(step, paths):
     out_dir = os.path.join(step_dir, "multiqc")
     os.makedirs(out_dir, exist_ok=True)
 
-    title = _MULTIQC_TITLE.get(step, f"Step {step}")
-    scan_dirs = step_dir
-    # ignore large fastq/bam files to speed up scanning
-    ignore_flags = "--ignore '*.fq.gz' --ignore '*.fastq.gz' --ignore '*.bam' --ignore '*.bai'"
+    title        = _MULTIQC_TITLE.get(step, f"Step {step}")
+    # Step 4 (methylation): ignore large genome/BAM files; also ignore temp files
+    if step == 4:
+        ignore_flags = (
+            "--ignore '*.fq.gz' --ignore '*.fastq.gz' "
+            "--ignore '*.bam' --ignore '*.bai' "
+            "--ignore '*.bedGraph' --ignore '*.temp'"
+        )
+    else:
+        ignore_flags = (
+            "--ignore '*.fq.gz' --ignore '*.fastq.gz' "
+            "--ignore '*.bam' --ignore '*.bai'"
+        )
+
+    # Step 1: generate replace_names.tsv so MultiQC unifies sample names
+    replace_flag = ""
+    if step == 1 and samples:
+        replace_tsv = os.path.join(out_dir, "replace_names.tsv")
+        _build_replace_names_tsv(samples, replace_tsv)
+        replace_flag = f"--replace-names {replace_tsv}"
+
     cmd = (
-        f"{multiqc} {scan_dirs} "
+        f"{multiqc} {step_dir} "
         f"--outdir {out_dir} "
         f"--filename multiqc_report.html "
         f"--title \"{title}\" "
         f"--export "
         f"{ignore_flags} "
+        f"{replace_flag} "
         f"--force "
         f"--quiet"
     )
-    disp(f"[multiqc] step {step}: running MultiQC on {scan_dirs}")
+    disp(f"[multiqc] step {step}: running MultiQC on {step_dir}")
     run_command(cmd, label=f"multiqc [step {step}]")
     html_out = os.path.join(out_dir, "multiqc_report.html")
     if os.path.exists(html_out):
@@ -424,14 +676,9 @@ def _run_multiqc(step, paths):
         disp(f"[multiqc] step {step}: WARNING — multiqc_report.html not found")
 
 
+# ── Main entry ────────────────────────────────────────────────────────────────
+
 def process(args, config_path="./cftk_init.json"):
-    """
-    True step-level parallel processing:
-      - All samples run step N in parallel (batched by parallel_samples).
-      - Step N+1 starts only after ALL samples finish step N.
-    Total cores are split evenly: per_sample_cores = total_cores // parallel_samples.
-    CPG matrix is auto-merged after step 4 when >1 sample succeeds.
-    """
     cfg     = load_config(config_path)
     paths   = get_work_paths(cfg)
     samples = get_all_samples(cfg)
@@ -439,11 +686,10 @@ def process(args, config_path="./cftk_init.json"):
     ref     = cfg["reference_data"]
     proc    = cfg["process"]
 
-    # resolve parallel: CLI --parallel > config parallel_samples > 1
-    parallel = getattr(args, "parallel", None)                or proc.get("parallel_samples", 1)
+    parallel = getattr(args, "parallel", None) \
+               or proc.get("parallel_samples", 1)
     parallel = max(1, int(parallel))
 
-    # per-sample cores: use step-specific total, divide by parallel
     step_cores = {
         s: max(1, proc[key]["params"].get("cores", 20) // parallel)
         for s, key in {
@@ -462,13 +708,12 @@ def process(args, config_path="./cftk_init.json"):
     disp(f"Steps            : {[STEPS[s] for s in steps]}")
     disp(f"Parallel samples : {parallel}")
     for s in steps:
-        total = proc[{1:'step1_trimming',2:'step2_alignment',
-                      3:'step3_markdup',4:'step4_methylation'}[s]
+        total = proc[{1: "step1_trimming", 2: "step2_alignment",
+                      3: "step3_markdup",  4: "step4_methylation"}[s]
                     ]["params"].get("cores", 20)
         disp(f"  Step {s} cores  : {step_cores[s]} per sample "
              f"(total {total} ÷ {parallel})")
 
-    # ── Step-level parallel: each step completes for ALL samples before next ──
     bedgraph_results = [None] * len(samples)
 
     for step in steps:
@@ -486,14 +731,13 @@ def process(args, config_path="./cftk_init.json"):
             for s in samples
         )
 
-        # store bedGraph paths from step4 for later merge
         if step == 4:
             bedgraph_results = results
 
         disp(f"[step {step}] all samples complete.")
-        _run_multiqc(step, paths)
+        # Pass samples to multiqc so replace_names.tsv can be generated for step 1
+        _run_multiqc(step, paths, samples=samples)
 
-    # ── Auto-merge cpg after step 4 ───────────────────────────────────────────
     if 4 in steps:
         successful = [bg for bg in bedgraph_results
                       if bg and os.path.exists(bg)]

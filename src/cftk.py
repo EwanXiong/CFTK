@@ -13,7 +13,6 @@ if _SRC not in sys.path:
 def _load(args):
     from init import load_config, get_work_paths
     cfg   = load_config(args.config)
-    # normalise: support both "comparison" and "control_group"/"case_group"
     if "comparison" not in cfg:
         cg = cfg.get("control_group", "")
         ag = cfg.get("case_group",    "")
@@ -29,7 +28,6 @@ def _load(args):
 
 
 def _p(cfg, *keys, default=None):
-    """Safe nested config accessor."""
     obj = cfg
     for k in keys:
         if not isinstance(obj, dict) or k not in obj:
@@ -58,10 +56,14 @@ def _cmd_qc(args):
     cfg, paths = _load(args)
     qc_p = _p(cfg, "analysis", "qc", "params", default={})
 
-    ga, gb            = get_group_names(cfg)
-    args.infile       = [get_bam(s, paths) for s in get_all_samples(cfg)]
+    ga, gb      = get_group_names(cfg)
+    all_samples = get_all_samples(cfg)
+
+    # M2: pass all_samples and paths for step 0 (qc_parser)
+    args.all_samples  = all_samples
+    args.paths        = paths
+    args.infile       = [get_bam(s, paths) for s in all_samples]
     args.output_dir   = paths["qc"]
-    # step1 reads cpg_matrix from 1_process/5_merged_matrix/
     args.matrices_dir = paths["cpg_matrix"]
     args.ref_fa       = _p(cfg, "reference_data", "genome_fa", default="")
     args.clip_r1      = qc_p.get("clip_r1",   0)
@@ -69,7 +71,8 @@ def _cmd_qc(args):
     args.fragment     = qc_p.get("fragment",  167)
     args.step_size    = qc_p.get("step_size", 2000)
     args.cores        = _p(cfg, "process", "step4_methylation", "params", "cores", default=1)
-    # group_labels for fragment length per-group plots
+    args.parallel     = getattr(args, "parallel", None) or \
+                        _p(cfg, "process", "parallel_samples", default=1)
     args.group_labels = {
         ga: [s["name"] for s in cfg["samples"].get(ga, [])],
         gb: [s["name"] for s in cfg["samples"].get(gb, [])],
@@ -80,7 +83,8 @@ def _cmd_qc(args):
     for step in steps:
         args.step = step
         run_qc(args)
-        plot_qc(args)
+        if step > 0:   # step 0 has no visualization
+            plot_qc(args)
 
 
 def _cmd_power(args):
@@ -115,15 +119,13 @@ def _cmd_diff(args):
     diff_p = _p(cfg, "analysis", "diff", "params", default={})
     ga, gb = get_group_names(cfg)
 
-    # group_labels as dict: {"Control": "Control_", "sALS": "sALS_"}
-    # column names in matrix are "{group}_{sample_name}" so startswith works
     args.group_labels = {
         ga: [s["name"] for s in cfg["samples"].get(ga, [])],
         gb: [s["name"] for s in cfg["samples"].get(gb, [])],
     }
-    args.colors       = diff_p.get("colors", None)
-    args.top_n        = diff_p.get("top_n_heatmap", 500)
-    args.output_dir   = paths["differential"]
+    args.colors     = diff_p.get("colors", None)
+    args.top_n      = diff_p.get("top_n_heatmap", 500)
+    args.output_dir = paths["differential"]
 
     modalities = (
         [args.modality] if getattr(args, "modality", None)
@@ -131,7 +133,6 @@ def _cmd_diff(args):
     )
 
     for mod in modalities:
-        # matrix location is canonical per modality
         matrix = get_matrix_path(paths, mod)
         if not os.path.exists(matrix):
             disp(f"WARNING: matrix not found for '{mod}': {matrix} — skipping.")
@@ -151,10 +152,10 @@ def _cmd_dmr(args):
     from analysis.dmr import run_dmr
     from visualization.visualization import plot_dmr
 
-    cfg, paths    = _load(args)
-    dmr_p         = _p(cfg, "analysis", "dmr", "params", default={})
-    ga, gb        = get_group_names(cfg)
-    dmr_samples   = _p(cfg, "analysis", "dmr", "samples", default={})
+    cfg, paths  = _load(args)
+    dmr_p       = _p(cfg, "analysis", "dmr", "params", default={})
+    ga, gb      = get_group_names(cfg)
+    dmr_samples = _p(cfg, "analysis", "dmr", "samples", default={})
 
     args.group_a        = ga
     args.group_b        = gb
@@ -174,7 +175,6 @@ def _cmd_dmr(args):
 
 
 def _resolve_bedgraphs(cfg, paths, group_name, selected_names=None):
-    """Resolve bedGraph paths from 1_process/4_methylation/ for a group."""
     all_samples = cfg["samples"].get(group_name, [])
     if selected_names:
         valid = {s["name"] for s in all_samples}
@@ -206,13 +206,11 @@ def _cmd_frag(args):
     ref        = cfg["reference_data"]
     frag_cfg   = _p(cfg, "analysis", "frag", default={})
 
-    args.infile      = [get_bam(s, paths) for s in get_all_samples(cfg)]
-    args.cores       = _p(cfg, "process", "step3_markdup", "params", "cores", default=20)
-    # parallel samples: CLI --parallel > config parallel_samples > 1
-    args.parallel    = getattr(args, "parallel", None) or \
-                       _p(cfg, "process", "parallel_samples", default=1)
+    args.infile   = [get_bam(s, paths) for s in get_all_samples(cfg)]
+    args.cores    = _p(cfg, "process", "step3_markdup", "params", "cores", default=20)
+    args.parallel = getattr(args, "parallel", None) or \
+                    _p(cfg, "process", "parallel_samples", default=1)
 
-    # reference paths shared across sub-analyses
     args.chrom_sizes = ref.get("chrom_sizes", "")
     args.genome2bit  = ref.get("genome_2bit", "")
     args.blacklist   = ref.get("blacklist", "")
@@ -224,34 +222,28 @@ def _cmd_frag(args):
     def _pf(sub, key, default=None):
         return _p(frag_cfg, sub, "params", key, default=default)
 
-    # each sub-analysis gets its canonical output dir from paths
     args.occ_out       = paths["occ_out"]
     args.wps_out       = paths["wps_out"]
     args.delfi_out     = paths["delfi_out"]
     args.end_motif_out = paths["end_motif_out"]
     args.cleavage_out  = paths["cleavage_out"]
 
-    # occupancy params
-    args.danpos      = _p(frag_cfg, "occupancy", "tool", default="danpos")
+    args.danpos       = _p(frag_cfg, "occupancy", "tool", default="danpos")
     args.danpos_extra = _pf("occupancy", "extra_args", default="--paired 1 -u 0 -c 1000000")
 
-    # wps params
-    args.wps_window  = _pf("wps", "wps_window", default=120)
-    args.wps_step    = _pf("wps", "wps_step",   default=10)
-    args.min_frag    = _pf("end_motif", "min_frag", default=100)
-    args.max_frag    = _pf("end_motif", "max_frag", default=220)
+    args.wps_window = _pf("wps", "wps_window", default=120)
+    args.wps_step   = _pf("wps", "wps_step",   default=10)
+    args.min_frag   = _pf("end_motif", "min_frag", default=100)
+    args.max_frag   = _pf("end_motif", "max_frag", default=220)
 
-    # delfi params
     args.delfi_mapq   = _pf("delfi", "mapq",       default=30)
     args.delfi_window = _pf("delfi", "window",     default=20)
     args.delfi_extra  = _pf("delfi", "extra_args", default="")
 
-    # end_motif params
     args.kmer     = _pf("end_motif", "kmer",       default=4)
     args.mapq     = _pf("end_motif", "mapq",       default=30)
     args.em_extra = _pf("end_motif", "extra_args", default="")
 
-    # cleavage params
     args.window     = _pf("cleavage", "window",     default=20)
     args.upstream   = _pf("cleavage", "upstream",   default=1500)
     args.downstream = _pf("cleavage", "downstream", default=1500)
@@ -266,7 +258,6 @@ def _cmd_frag(args):
         getattr(args, "cleavage",   False),
     ])
 
-    # group_labels for per-group plots in frag visualization
     ga, gb = get_group_names(cfg)
     args.group_labels = {
         ga: [s["name"] for s in cfg["samples"].get(ga, [])],
@@ -302,7 +293,6 @@ def _cmd_mesa(args):
     from util import disp
 
     disp("[mesa] starting _cmd_mesa")
-    # redirect stdin to /dev/null to prevent background process hangs
     try:
         import sys as _sys
         if not _sys.stdin.isatty():
@@ -312,7 +302,6 @@ def _cmd_mesa(args):
     cfg, paths = _load(args)
     disp("[mesa] config loaded")
     mesa_p = _p(cfg, "analysis", "mesa", "params", default={})
-    # support both "comparison" and "control_group"/"case_group" formats
     if "comparison" in cfg:
         ga, gb = cfg["comparison"].split("_vs_", 1)
     else:
@@ -328,7 +317,6 @@ def _cmd_mesa(args):
     args.cores      = _p(cfg, "process", "step4_methylation", "params", "cores", default=-1)
     os.makedirs(paths["mesa"], exist_ok=True)
 
-    # always recompute from config — never reuse args from previous steps
     args.modality = mesa_p.get("modalities", ["cpg"])
     args.infile   = [get_matrix_path(paths, m) for m in args.modality]
     args.label    = _make_label(cfg, paths)
@@ -344,13 +332,6 @@ def _cmd_mesa(args):
 
 
 def _make_label(cfg, paths):
-    """
-    Generate label.tsv: sample_name TAB 0|1.
-    Convention: Control/normal group = 0, Disease/case group = 1.
-    Disease group is detected by keywords in group name.
-    If ga matches disease keywords → ga=1, gb=0.
-    Otherwise falls back to comparison order: ga=0, gb=1.
-    """
     import pandas as pd
     from util import disp
     ga, gb = cfg["comparison"].split("_vs_", 1)
@@ -365,10 +346,11 @@ def _make_label(cfg, paths):
     else:
         label_a, label_b = 0, 1
 
-    rows = [(s["name"], label_a) for s in cfg["samples"].get(ga, [])] +            [(s["name"], label_b) for s in cfg["samples"].get(gb, [])]
+    rows = [(s["name"], label_a) for s in cfg["samples"].get(ga, [])] + \
+           [(s["name"], label_b) for s in cfg["samples"].get(gb, [])]
     label_path = os.path.join(paths["mesa"], "label.tsv")
     os.makedirs(paths["mesa"], exist_ok=True)
-    pd.DataFrame(rows).to_csv(label_path, sep="	", header=False, index=False)
+    pd.DataFrame(rows).to_csv(label_path, sep="\t", header=False, index=False)
     disp(f"[label] {ga}={label_a}, {gb}={label_b} → {label_path}")
     return label_path
 
@@ -384,16 +366,13 @@ def _cmd_report(args):
     args.output_dir   = paths["report"]
     args.project_name = cfg.get("project_name", "cftk_project")
     args.groups       = [ga, gb]
-    # pass config path so report_generator can read group/sample info
     if not hasattr(args, "config"):
         args.config = "./cftk_init.json"
 
     generate_report(args)
 
 
-
 def _cmd_merge(args):
-    """Manual merge: build feature matrix from user-specified files in config."""
     from analysis.merge import run_merge
     from util import disp
 
@@ -406,13 +385,7 @@ def _cmd_merge(args):
         run_merge(mod, cfg, paths)
 
 
-
 def _cmd_vis(args):
-    """
-    Re-generate visualizations from existing result files without re-running analysis.
-    Reads all required paths from config and existing output files.
-    Supported modes: power, qc, diff, dmr, frag, mesa, all
-    """
     from init import get_group_names, get_all_samples, get_matrix_path
     from visualization.visualization import (
         plot_qc, plot_differential, plot_dmr,
@@ -438,13 +411,11 @@ def _cmd_vis(args):
     def _pf(sub, key, default=None):
         return _p(frag_cfg, sub, "params", key, default=default)
 
-    # ── power ─────────────────────────────────────────────────────────────────
     if "power" in modes:
         disp("[vis] power")
         args.output_dir = paths["power"]
         plot_power(args)
 
-    # ── qc ────────────────────────────────────────────────────────────────────
     if "qc" in modes:
         qc_p = _p(cfg, "analysis", "qc", "params", default={})
         args.output_dir   = paths["qc"]
@@ -452,21 +423,18 @@ def _cmd_vis(args):
         args.clip_r1      = qc_p.get("clip_r1",  0)
         args.clip_r2      = qc_p.get("clip_r2",  0)
         args.group_labels = group_labels
-        # if args.step is set (int or single-item list), only run that step
-        # otherwise run all three steps
         qc_step = getattr(args, "step", None)
         if isinstance(qc_step, int):
             qc_steps = [qc_step]
         elif isinstance(qc_step, list) and len(qc_step) == 1:
             qc_steps = [qc_step[0]]
         else:
-            qc_steps = [1, 2, 3]
+            qc_steps = [1, 2, 3]   # vis: skip step 0 (no plot output)
         for step in qc_steps:
             disp(f"[vis] qc step {step}")
             args.step = step
             plot_qc(args)
 
-    # ── diff ──────────────────────────────────────────────────────────────────
     if "diff" in modes:
         modalities = diff_p.get("modalities", ["cpg"])
         for mod in modalities:
@@ -484,7 +452,6 @@ def _cmd_vis(args):
             args.top_n        = diff_p.get("top_n_heatmap", 500)
             plot_differential(args)
 
-    # ── dmr ───────────────────────────────────────────────────────────────────
     if "dmr" in modes:
         dmr_out = os.path.join(paths["differential"], "dmr")
         ann_bed = os.path.join(dmr_out, "dmr_annotated.bed")
@@ -499,7 +466,6 @@ def _cmd_vis(args):
             args.top_n      = dmr_p.get("top_n", 20)
             plot_dmr(args)
 
-    # ── frag ──────────────────────────────────────────────────────────────────
     if "frag" in modes:
         ref = cfg["reference_data"]
         args.occ_out       = paths["occ_out"]
@@ -512,12 +478,10 @@ def _cmd_vis(args):
         args.upstream      = _pf("cleavage", "upstream",   default=1500)
         args.downstream    = _pf("cleavage", "downstream", default=1500)
         args.group_labels  = group_labels
-
         for mode in ["occupancy", "wps", "delfi", "end_motif", "cleavage"]:
             disp(f"[vis] frag — {mode}")
             plot_fragmentomics(args, mode=mode)
 
-    # ── mesa ──────────────────────────────────────────────────────────────────
     if "mesa" in modes:
         pred_tsv = os.path.join(paths["mesa"], "loocv_predictions.tsv")
         if not os.path.exists(pred_tsv):
@@ -527,25 +491,21 @@ def _cmd_vis(args):
             args.output_dir = paths["mesa"]
             plot_mesa(args)
 
+
 def _cmd_run_all(args):
     from util import disp
 
-    # ── process: steps 1-4 ───────────────────────────────────────────────────
-    args.step = [1, 2, 3, 4]
-
-    # ── mesa: enable all three sub-steps ─────────────────────────────────────
+    args.step        = [1, 2, 3, 4]
     args.performance = True
     args.mesa_model  = True
     args.loocv       = True
     args.perf_tsv    = getattr(args, "perf_tsv", None)
 
     def _vis(mode):
-        """Run visualization for a single mode immediately after analysis."""
         _sa(args, "mode", [mode])
-        _sa(args, "step", None)  # reset step so vis runs all sub-steps by default
+        _sa(args, "step", None)
         _cmd_vis(args)
 
-    # ── checkpoint helpers ────────────────────────────────────────────────
     import glob as _glob
     cfg, paths = _load(args)
     all_samples = [s["name"] for g in cfg["samples"].values() for s in g]
@@ -560,8 +520,15 @@ def _cmd_run_all(args):
         )
 
     def _done_qc(step):
-        step_dirs = {1: "1_methylation_distribution",
-                     2: "2_fragment_length", 3: "3_dinucleotide_freq"}
+        if step == 0:
+            summary = os.path.join(paths["qc"], "qc_summary.tsv")
+            scores  = os.path.join(paths["qc"], "qc_scores.tsv")
+            return os.path.exists(summary) and os.path.exists(scores)
+        step_dirs = {
+            1: "1_methylation_distribution",
+            2: "2_fragment_length",
+            3: "3_dinucleotide_freq",
+        }
         d = os.path.join(paths["qc"], step_dirs[step])
         return os.path.isdir(d) and bool(_glob.glob(os.path.join(d, "*.png")))
 
@@ -582,31 +549,33 @@ def _cmd_run_all(args):
     def _done_mesa():
         return os.path.exists(os.path.join(paths["mesa"], "loocv_predictions.tsv"))
 
-    # ── pipeline: (step_name, analysis_fn, vis_fn_or_None, checkpoint_fn_or_None)
-    # vis_fn is only called if analysis was NOT skipped by checkpoint
-    # report always runs (no checkpoint, always regenerate)
     pipeline = [
-        # (step_name,          analysis_fn,
-        #  vis_fn,             checkpoint_fn)
         ("process [1-4]",
          _cmd_process,
          None,
          _done_process),
 
         ("qc [methylation]",
-         lambda a: (_sa(a, "step", 1), _cmd_qc(a)),
-         lambda a: (_sa(a, "step", 1), _cmd_vis(a)),
+         lambda a: (_sa(a, "step", [1]), _cmd_qc(a)),
+         lambda a: (_sa(a, "step", [1]), _cmd_vis(a)),
          lambda: _done_qc(1)),
 
+        # step 2 must run BEFORE step 0 so fragment CSVs exist for median_frag_len
         ("qc [fragment]",
-         lambda a: (_sa(a, "step", 2), _cmd_qc(a)),
-         lambda a: (_sa(a, "step", 2), _cmd_vis(a)),
+         lambda a: (_sa(a, "step", [2]), _cmd_qc(a)),
+         lambda a: (_sa(a, "step", [2]), _cmd_vis(a)),
          lambda: _done_qc(2)),
 
         ("qc [dinucleotide]",
-         lambda a: (_sa(a, "step", 3), _cmd_qc(a)),
-         lambda a: (_sa(a, "step", 3), _cmd_vis(a)),
+         lambda a: (_sa(a, "step", [3]), _cmd_qc(a)),
+         lambda a: (_sa(a, "step", [3]), _cmd_vis(a)),
          lambda: _done_qc(3)),
+
+        # M2: step 0 — runs AFTER step 2 so fragment CSVs are present for median_frag_len
+        ("qc [summary]",
+         lambda a: (_sa(a, "step", [0]), _cmd_qc(a)),
+         None,
+         lambda: _done_qc(0)),
 
         ("diff",
          _cmd_diff,
@@ -634,14 +603,11 @@ def _cmd_run_all(args):
          None),
     ]
 
-    # ── execute pipeline ──────────────────────────────────────────────────
     for step_name, ana_fn, vis_fn, check_fn in pipeline:
-        # checkpoint: skip analysis AND its vis if already done
         if check_fn and check_fn():
             disp(f"[run-all] ── {step_name} — already done, skipping ──")
             continue
 
-        # run analysis
         disp(f"[run-all] ── {step_name} ──")
         ana_ok = True
         try:
@@ -654,7 +620,6 @@ def _cmd_run_all(args):
             disp("[run-all] continuing...")
             ana_ok = False
 
-        # run vis only if analysis succeeded and vis_fn is defined
         if ana_ok and vis_fn:
             disp(f"[run-all] ── vis [{step_name}] ──")
             try:
@@ -701,22 +666,23 @@ def build_parser():
              "  4 = CpG methylation calling + auto cpg_matrix merge")
     p.add_argument("-s", "--step", dest="step", type=int, nargs="+",
                    required=True, choices=range(1, 5), metavar="{1,2,3,4}")
-    p.add_argument("--parallel", type=int, default=None, metavar="N",
-                   help="Number of samples to process in parallel per step.\n"
-                        "Overrides process.parallel_samples in config.\n"
-                        "Total cores are split evenly: cores_per_sample = total_cores // N")
+    p.add_argument("--parallel", type=int, default=None, metavar="N")
     p.set_defaults(func=_cmd_process)
 
-    # qc
+    # qc — M2: step range extended to 0-3
     p = sub.add_parser("qc",
         help="Part 2: QC analysis.\n"
+             "  0 = parse process outputs → qc_summary.tsv + qc_scores.tsv\n"
              "  1 = methylation distribution (needs cpg_matrix)\n"
              "  2 = fragment length distribution\n"
              "  3 = dinucleotide frequency")
     p.add_argument("-s", "--step", dest="step", type=int, nargs="+",
-                   required=True, choices=range(1, 4), metavar="{1,2,3}",
-                   help="One or more QC steps. e.g. -s 1 2 3")
-    p.add_argument("--title", default=None)
+                   required=True, choices=range(0, 4), metavar="{0,1,2,3}",
+                   help="One or more QC steps. e.g. -s 0 1 2 3")
+    p.add_argument("--title",    default=None)
+    p.add_argument("--parallel", type=int, default=None, metavar="N")
+    p.add_argument("--force",    action="store_true",
+                   help="Re-run even if output files already exist")
     p.set_defaults(func=_cmd_qc)
 
     # power
@@ -727,31 +693,18 @@ def build_parser():
 
     # diff
     p = sub.add_parser("diff",
-        help="Part 2: Differential analysis — PCA / violin / heatmap.\n"
-             "Matrix locations:\n"
-             "  cpg       → 1_process/5_merged_matrix/cpg_matrix.tsv\n"
-             "  occupancy → 4_fragmentomics/occupancy/occupancy_matrix.tsv\n"
-             "  wps       → 4_fragmentomics/wps/wps_matrix.tsv")
-    p.add_argument("--modality", default=None,
-                   help="Run a single modality only.")
+        help="Part 2: Differential analysis — PCA / violin / heatmap.")
+    p.add_argument("--modality", default=None)
     p.set_defaults(func=_cmd_diff)
 
     # dmr
     p = sub.add_parser("dmr",
-        help="Part 2: DMR analysis — prepare + metilene + annotation + volcano.\n"
-             "bedGraph auto-located from 1_process/4_methylation/.\n"
-             "Samples configurable in analysis.dmr.samples.")
+        help="Part 2: DMR analysis — prepare + metilene + annotation + volcano.")
     p.set_defaults(func=_cmd_dmr)
 
     # frag
     p = sub.add_parser("frag",
-        help="Part 2: Fragmentomics (all five if no flag given).\n"
-             "  --occupancy  DANPOS3 → 4_fragmentomics/occupancy/\n"
-             "  --wps        WPS     → 4_fragmentomics/wps/\n"
-             "  --delfi      DELFI   → 4_fragmentomics/delfi/\n"
-             "  --end-motif  k-mer   → 4_fragmentomics/end_motif/\n"
-             "  --cleavage   CTCF    → 4_fragmentomics/cleavage/\n"
-             "occupancy and wps auto-merge matrix when >1 sample.")
+        help="Part 2: Fragmentomics (all five if no flag given).")
     p.add_argument("--occupancy", action="store_true")
     p.add_argument("--wps",       action="store_true")
     p.add_argument("--delfi",     action="store_true")
@@ -770,28 +723,18 @@ def build_parser():
     p.add_argument("--loocv",      dest="loocv",      action="store_true")
     p.set_defaults(func=_cmd_mesa)
 
-    # merge (manual)
+    # merge
     p = sub.add_parser("merge",
-        help="Build feature matrix from user-specified files.\n"
-             "Reads configuration from the 'merge' block in cftk_init.json.\n"
-             "Supported types: bedgraph, occupancy_tsv, wps_tsv, delfi_tsv.\n"
-             "Overwrites existing matrix if present.")
-    p.add_argument("--modality", nargs="+", default=None,
-                   help="Modality/modalities to merge. "
-                        "Default: all keys in config merge block.")
+        help="Build feature matrix from user-specified files.")
+    p.add_argument("--modality", nargs="+", default=None)
     p.set_defaults(func=_cmd_merge)
 
     # vis
     p = sub.add_parser("vis",
-        help="Re-generate visualizations from existing results without re-running analysis.\n"
-             "Reads all result files from their canonical output locations.\n"
-             "Modes: power, qc, diff, dmr, frag, mesa, all (default)")
+        help="Re-generate visualizations from existing results.")
     p.add_argument("--mode", nargs="+", default=None,
                    choices=["power", "qc", "diff", "dmr", "frag", "mesa", "all"],
-                   metavar="MODE",
-                   help="Which visualizations to regenerate. "
-                        "Default: all. "
-                        "Choices: power qc diff dmr frag mesa all")
+                   metavar="MODE")
     p.set_defaults(func=_cmd_vis)
 
     # report

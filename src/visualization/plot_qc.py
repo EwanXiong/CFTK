@@ -1,4 +1,8 @@
-"""QC plots: methylation distribution, fragment length, dinucleotide freq, power curves."""
+"""QC plots: methylation distribution, fragment length, dinucleotide freq, power curves.
+
+M3c: plot_qc_summary() removed — QC status table is now rendered as an interactive
+     Plotly widget inside report_generator.py (_qc_table).
+"""
 
 import glob
 import os
@@ -6,6 +10,7 @@ import numpy as np
 import pandas as pd
 import matplotlib as mpl
 import matplotlib.pyplot as plt
+import matplotlib.patches as mpatches
 import seaborn as sns
 from joblib import Parallel, delayed
 
@@ -48,12 +53,6 @@ def plot_methylation_distribution(matrix_path, png_path, pdf_path, args):
 # ── Fragment length ───────────────────────────────────────────────────────────
 
 def _load_fragment_ratios(prefix, clip_r1=0, clip_r2=0):
-    """
-    Load all per-sample raw CSVs, cap at 500bp, return:
-      sample_ratios : dict {sample_name: ratio Series (index=size_arr)}
-      size_arr      : np.array of fragment sizes (len=500)
-      base          : pd.DataFrame Size index for merging
-    """
     raw_files = sorted(glob.glob(f"{prefix}.*.raw.csv"))
     if not raw_files:
         return {}, None, None
@@ -63,11 +62,9 @@ def _load_fragment_ratios(prefix, clip_r1=0, clip_r2=0):
 
     sample_ratios = {}
     for fp in raw_files:
-        # stem: fragment_length.{stem}.raw.csv → extract stem
         stem = os.path.basename(fp).replace(
             os.path.basename(prefix) + ".", ""
         ).replace(".raw.csv", "")
-        # strip .markdup suffix to recover sample name
         name = stem.replace(".markdup", "")
 
         t = pd.read_table(fp, skiprows=1).iloc[:, :2]
@@ -90,7 +87,6 @@ def _load_fragment_ratios(prefix, clip_r1=0, clip_r2=0):
 
 
 def _frag_ax_style(ax, size_arr, peak):
-    """Apply consistent x-axis style: fixed range 50-250, peak vline, rotated ticks."""
     fixed_ticks = sorted(set([50, 100, peak, 200, 250]))
     ax.set_xlim(50, 250)
     ax.set_xticks(fixed_ticks)
@@ -103,10 +99,6 @@ def _frag_ax_style(ax, size_arr, peak):
 
 
 def plot_fragment_length(prefix, png_path, pdf_path, args):
-    """
-    Figure 1: all-sample mean curve.
-    Figures 2 & 3: per-group and comparison curves (when group_labels provided).
-    """
     clip_r1      = getattr(args, "clip_r1", 0)
     clip_r2      = getattr(args, "clip_r2", 0)
     group_labels = getattr(args, "group_labels", None)
@@ -116,7 +108,6 @@ def plot_fragment_length(prefix, png_path, pdf_path, args):
         print("[plot_qc] No fragment length files found, skipping.")
         return
 
-    # ── Figure 1: all-sample mean ─────────────────────────────────────────────
     all_ratio = pd.concat(list(sample_ratios.values()), axis=1).mean(axis=1)
     peak      = int(size_arr[all_ratio.values.argmax()])
 
@@ -129,16 +120,13 @@ def plot_fragment_length(prefix, png_path, pdf_path, args):
     fig.tight_layout()
     _save(fig, png_path, pdf_path)
 
-    # ── Figures 2 & 3: per-group and comparison ───────────────────────────────
     if not group_labels:
         return
 
     out_dir = os.path.dirname(png_path)
 
-    # build group → mean ratio
     group_mean = {}
     for grp, col_names in group_labels.items():
-        # match sample_ratios keys to col_names (strip .markdup already done)
         grp_ratios = [v for k, v in sample_ratios.items() if k in col_names]
         if not grp_ratios:
             print(f"[plot_qc] WARNING: no fragment data found for group '{grp}'")
@@ -147,7 +135,6 @@ def plot_fragment_length(prefix, png_path, pdf_path, args):
 
     colors = ["#2c7bb6", "#d7191c", "#1a9641", "#fdae61"]
 
-    # Figure 2: one plot per group
     for i, (grp, ratio) in enumerate(group_mean.items()):
         grp_peak = int(size_arr[ratio.values.argmax()])
         fig, ax  = plt.subplots(figsize=(4, 4))
@@ -160,7 +147,6 @@ def plot_fragment_length(prefix, png_path, pdf_path, args):
               os.path.join(out_dir, f"fragment_length_{grp}.png"),
               os.path.join(out_dir, f"fragment_length_{grp}.pdf"))
 
-    # Figure 3: both groups on one plot
     if len(group_mean) >= 2:
         fig, ax = plt.subplots(figsize=(4, 4))
         all_peaks = []
@@ -172,7 +158,6 @@ def plot_fragment_length(prefix, png_path, pdf_path, args):
             ax.axvline(grp_peak, color=colors[i % len(colors)],
                        linestyle="-.", linewidth=1, alpha=0.7,
                        label=f"peak={grp_peak}bp")
-        # x-axis ticks: union of fixed + both group peaks
         fixed_ticks = sorted(set([50, 100, 200, 250] + all_peaks))
         ax.set_xlim(50, 250)
         ax.set_xticks(fixed_ticks)
@@ -191,7 +176,6 @@ def plot_fragment_length(prefix, png_path, pdf_path, args):
 # ── Dinucleotide frequency ────────────────────────────────────────────────────
 
 def plot_dinucleotide_freq(result_prefix, png_path, pdf_path, args):
-    """Plot AT/GC dinucleotide frequencies from pre-computed bedtools nuc output."""
     frag_len = getattr(args, "fragment", 167)
     dinu_AT  = ["AA", "AT", "TA", "TT"]
     dinu_GC  = ["GG", "GC", "CG", "CC"]
@@ -200,16 +184,44 @@ def plot_dinucleotide_freq(result_prefix, png_path, pdf_path, args):
         frames = []
         for d in dinucs:
             fp = f"{result_prefix}.all_fragment_{d}.txt"
-            if not os.path.exists(fp):
+            if not os.path.exists(fp) or os.path.getsize(fp) == 0:
                 continue
-            t = (
-                pd.read_table(fp, usecols=["4_usercol", "15_user_patt_count"])
-                .groupby("4_usercol").sum()
-            )
-            frames.append(t)
+            # bedtools nuc column names depend on number of input BED columns.
+            # Detect dynamically: position col = "*_usercol" matching pos range,
+            # count col = last "*_user_patt_count" column.
+            try:
+                header = pd.read_table(fp, nrows=0)
+                cols = list(header.columns)
+                pos_cols   = [c for c in cols if c.endswith("_usercol")]
+                count_cols = [c for c in cols if c.endswith("_user_patt_count")]
+                if not pos_cols or not count_cols:
+                    print(f"[plot_qc] {d}: unexpected bedtools nuc header: {cols}")
+                    continue
+                # pos col = usercol with integer values in [-200, 200]
+                header5 = pd.read_table(fp, nrows=5)
+                pos_col = None
+                for uc in pos_cols:
+                    sample_vals = pd.to_numeric(header5[uc], errors="coerce").dropna()
+                    if len(sample_vals) > 0 and -200 <= sample_vals.min() and sample_vals.max() <= 200:
+                        pos_col = uc
+                        break
+                if pos_col is None:
+                    pos_col = pos_cols[0]
+                count_col = count_cols[-1]   # last patt_count = the queried pattern
+                t = (
+                    pd.read_table(fp, usecols=[pos_col, count_col])
+                    .apply(pd.to_numeric, errors="coerce")
+                    .dropna()
+                    .groupby(pos_col)[count_col].sum()
+                    .rename("count")
+                )
+                frames.append(t)
+            except Exception as e:
+                print(f"[plot_qc] WARNING: could not load {fp}: {e}")
+                continue
         if not frames:
             return pd.Series(dtype=float)
-        return pd.concat(frames, axis=1).mean(axis=1)
+        return pd.concat(frames, axis=1).sum(axis=1)
 
     at_sig = _load(dinu_AT)
     gc_sig = _load(dinu_GC)
@@ -239,13 +251,11 @@ def plot_dinucleotide_freq(result_prefix, png_path, pdf_path, args):
 # ── Power curves ──────────────────────────────────────────────────────────────
 
 def plot_power_curves(data, png_path, pdf_path, threshold=0.8):
-    """Complementary ECDF of per-CpG power for different read depths."""
     def _ecdf_compl(arr):
         x = np.sort(arr)
         y = 1 - np.arange(1, len(x) + 1) / len(x)
         return np.append(x, x[-1]), np.append(y, 0)
 
-    # parse depth levels from column names like "10_mean", "20_mean", ...
     depth_cols = [c for c in data.columns if c.endswith("_mean")]
     depths     = [c.split("_")[0] for c in depth_cols]
 
@@ -255,9 +265,8 @@ def plot_power_curves(data, png_path, pdf_path, threshold=0.8):
 
     for col, depth in zip(depth_cols, depths):
         x, y = _ecdf_compl(data[col].dropna().values)
-        line = ax.plot(x, y, label=str(depth))[0]
+        line  = ax.plot(x, y, label=str(depth))[0]
         color = line.get_color()
-        # CI band if available
         cl = col.replace("_mean", "_CI_l")
         cu = col.replace("_mean", "_CI_u")
         if cl in data.columns and cu in data.columns:
@@ -279,3 +288,4 @@ def plot_power_curves(data, png_path, pdf_path, threshold=0.8):
     ax.spines[["top", "right"]].set_visible(False)
     fig.tight_layout()
     _save(fig, png_path, pdf_path)
+
