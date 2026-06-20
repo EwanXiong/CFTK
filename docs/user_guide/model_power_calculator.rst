@@ -54,7 +54,7 @@ Probability of success
    P(p \leq \alpha \;\cap\; AUC_{OOF} \geq AUC_{target})
 
 A simulated study counts as successful only when it both detects
-no-discrimination departure and reaches the target AUC. Therefore,
+a departure from no discrimination and reaches the target AUC. Therefore,
 ``probability_of_success`` cannot exceed either ``detection_power`` or
 ``target_attainment_probability``. This is the default plot in the web app.
 
@@ -102,9 +102,10 @@ training sets.
 
 Fast mode uses 20 null simulations per CpG template. At ``alpha = 0.05``, this
 is the minimum practical empirical tail calibration and is intentionally
-coarse. Standard mode uses 50 null simulations per template and is preferred
-for final reporting. Larger offline analyses should use more null simulations
-when precise tail probabilities are required.
+coarse. Standard mode uses 30 null simulations per template and reduces Monte
+Carlo noise, but it remains a web-oriented approximation. Larger offline
+analyses should use substantially more null simulations when precise tail
+probabilities are required.
 
 User-Adjustable Assumptions
 ---------------------------
