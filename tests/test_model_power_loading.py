@@ -1,4 +1,5 @@
 import importlib
+import ast
 import sys
 import tempfile
 import types
@@ -6,10 +7,31 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-import numpy as np
-import pandas as pd
 
-from analysis.model_power_reference import convert_pickles_to_array_reference
+class ModelPowerSourcePathTests(unittest.TestCase):
+    def test_default_reference_dir_source_points_to_repo_data(self):
+        source_path = Path(__file__).resolve().parents[1] / "src" / "analysis" / "model_power.py"
+        tree = ast.parse(source_path.read_text())
+
+        assignments = [
+            node for node in tree.body
+            if isinstance(node, ast.Assign)
+            and any(
+                isinstance(target, ast.Name)
+                and target.id == "_DEFAULT_REFERENCE_DIR"
+                for target in node.targets
+            )
+        ]
+
+        self.assertEqual(len(assignments), 1)
+        expression = ast.unparse(assignments[0].value)
+        constants = [
+            node.value
+            for node in ast.walk(assignments[0].value)
+            if isinstance(node, ast.Constant)
+        ]
+        self.assertNotIn("model_power", expression)
+        self.assertIn("data", constants)
 
 
 class ModelPowerLoadingTests(unittest.TestCase):
@@ -47,6 +69,10 @@ class ModelPowerLoadingTests(unittest.TestCase):
                 sys.modules[name] = module
 
     def _reference_dir(self, root: Path) -> Path:
+        import pandas as pd
+
+        from analysis.model_power_reference import convert_pickles_to_array_reference
+
         index = pd.Index(["chr1_10", "chr1_20", "chr2_30"], dtype=object)
         mean = pd.Series([0.10, 0.20, 0.30], index=index)
         std = pd.DataFrame(
@@ -77,7 +103,15 @@ class ModelPowerLoadingTests(unittest.TestCase):
 
         self.assertTrue(hasattr(module, "load_default_model_power_reference"))
 
+    def test_default_reference_dir_is_repo_data(self):
+        module = importlib.import_module("analysis.model_power")
+        expected = Path(module.__file__).resolve().parents[2] / "data"
+
+        self.assertEqual(module._DEFAULT_REFERENCE_DIR, expected)
+
     def test_explicit_load_default_reference_sets_compatibility_globals(self):
+        import numpy as np
+
         with tempfile.TemporaryDirectory() as tmp:
             reference_dir = self._reference_dir(Path(tmp))
             module = importlib.import_module("analysis.model_power")

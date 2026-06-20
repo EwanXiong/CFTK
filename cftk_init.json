@@ -28,9 +28,9 @@
   "reference_data": {
     "genome_fa": "/path/to/hg38.fa",
     "genome_2bit": "/path/to/hg38.2bit",
-    "chrom_sizes": "/path/to/hg38.autosomes.chrom.sizes",
+    "chrom_sizes": "/path/to/CFTK/data/hg38.chrom.sizes",
     "genome_build": "hg38",
-    "tss_pas_bed": "/path/to/hg38_annotated_collapsed_TSS_PAS_1kb.bed",
+    "tss_pas_bed": "/path/to/CFTK/data/hg38_annotated_collapsed_TSS_PAS_1kb.bed",
     "ctcf_bed": "/path/to/GRCh38-cCREs.CA-CTCF.bed",
     "blacklist": "/path/to/hg38-blacklist.v2.bed",
     "gap": "/path/to/hg38_gap_filtered.bed",

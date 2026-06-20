@@ -23,8 +23,8 @@ from pathlib import Path
 # Directory containing src/.
 _MODULE_DIR = Path(__file__).resolve().parent.parent
 
-# project/data/model_power/
-_DEFAULT_REFERENCE_DIR = _MODULE_DIR.parent / "data" / "model_power"
+# project/data/
+_DEFAULT_REFERENCE_DIR = _MODULE_DIR.parent / "data"
 
 cpg_std_summary: pd.DataFrame | None = None
 cpg_mean: pd.Series | None = None

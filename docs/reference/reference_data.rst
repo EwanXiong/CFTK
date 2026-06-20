@@ -8,9 +8,11 @@ Bundled Files
 
 The repository keeps these reference assets:
 
-- ``hg38.chrom.sizes``
-- ``hg38_annotated_collapsed_TSS_PAS_1kb.bed``
-- ``covered_targets_Twist_Methylome_hg38_annotated_collapsed.bed``
+- ``data/hg38.chrom.sizes``
+- ``data/hg38_annotated_collapsed_TSS_PAS_1kb.bed``
+- ``data/covered_targets_Twist_Methylome_hg38_annotated_collapsed.bed``
+- ``data/manifest.json`` and companion ``data/*.npy`` / ``data/*.npz`` arrays
+  for model-level power analysis.
 
 The example config still uses placeholder paths. Replace the placeholders with
 paths that are valid in your environment.
