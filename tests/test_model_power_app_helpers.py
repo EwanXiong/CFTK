@@ -9,7 +9,6 @@ def test_parse_sample_size_text_sorts_and_deduplicates():
     from apps.model_power_app_helpers import parse_sample_size_text
 
     parsed = parse_sample_size_text("100, 50, 100, 200")
-
     assert parsed.values == (50, 100, 200)
     assert parsed.warnings == ("Duplicate sample sizes were removed.",)
 
@@ -33,7 +32,6 @@ def test_parse_sample_size_range_generates_sorted_grid():
     from apps.model_power_app_helpers import parse_sample_size_range
 
     parsed = parse_sample_size_range(start=50, stop=100, step=25)
-
     assert parsed.values == (50, 75, 100)
 
 
@@ -50,7 +48,6 @@ def test_class_count_validation_requires_each_class_per_fold():
     from apps.model_power_app_helpers import AppValidationError, validate_class_counts
 
     validate_class_counts(sample_sizes=(30,), ratio=1.0, cv_folds=5)
-
     with pytest.raises(AppValidationError, match="at least 10 cases and 10 controls"):
         validate_class_counts(sample_sizes=(12,), ratio=1.0, cv_folds=10)
 
@@ -60,7 +57,6 @@ def test_available_depths_are_read_from_manifest(tmp_path):
 
     manifest = {"depth_labels": ["5", "10", "30"]}
     (tmp_path / "manifest.json").write_text(json.dumps(manifest))
-
     assert available_depths_from_manifest(tmp_path) == (5, 10, 30)
 
 
@@ -76,7 +72,6 @@ def test_biomarker_validation_bounds_signal_and_top_k():
         within_block_rho=0.2,
         sd_stat="mean",
     )
-
     with pytest.raises(AppValidationError, match="n_signal_cpgs"):
         validate_biomarker_inputs(
             n_features=100,
@@ -87,7 +82,6 @@ def test_biomarker_validation_bounds_signal_and_top_k():
             within_block_rho=0.2,
             sd_stat="mean",
         )
-
     with pytest.raises(AppValidationError, match="top_k"):
         validate_biomarker_inputs(
             n_features=100,
@@ -113,7 +107,6 @@ def test_biomarker_validation_rejects_unsupported_sd_and_effect_direction():
             within_block_rho=0.2,
             sd_stat="bad",
         )
-
     with pytest.raises(AppValidationError, match="Unsupported effect direction"):
         validate_biomarker_inputs(
             n_features=100,
@@ -136,7 +129,6 @@ def test_analysis_validation_bounds_secondary_settings():
         specificity_target=0.9,
         cv_folds=5,
     )
-
     with pytest.raises(AppValidationError, match="Target cross-validated AUC"):
         validate_analysis_inputs(
             target_auc=0.95,
@@ -144,7 +136,6 @@ def test_analysis_validation_bounds_secondary_settings():
             specificity_target=0.9,
             cv_folds=5,
         )
-
     with pytest.raises(AppValidationError, match="Cross-validation folds"):
         validate_analysis_inputs(
             target_auc=0.75,
@@ -191,29 +182,32 @@ def test_standard_default_only_warns():
     assert warning is not None
 
 
-def test_app_imports_public_discovery_grid_runner():
-    source = Path("apps/model_power_calculator.py").read_text()
-    tree = ast.parse(source)
-
+def test_app_uses_null_calibrated_operating_characteristics():
+    runtime_source = Path("apps/model_power_app_runtime.py").read_text()
+    runtime_tree = ast.parse(runtime_source)
     imports = [
         node
-        for node in ast.walk(tree)
+        for node in ast.walk(runtime_tree)
         if isinstance(node, ast.ImportFrom)
-        and node.module == "analysis.model_power_discovery"
+        and node.module == "analysis.model_power_operating_characteristics"
         and any(alias.name == "run_power_sample_size_grid" for alias in node.names)
     ]
     assert imports
-    assert "run_fast_model_power_analysis" not in source
-    assert "train_fraction" not in source
+
+    page_source = Path("apps/model_power_app_page.py").read_text()
+    assert "Probability of success (conservative)" in page_source
+    assert "Target-attainment probability" in page_source
+    assert "Detection power" in page_source
+    assert "train_fraction" not in runtime_source + page_source
 
 
 def test_no_explicit_penalty_argument_in_app_path():
     for path in [
         Path("apps/model_power_calculator.py"),
         Path("apps/model_power_app_helpers.py"),
+        Path("apps/model_power_app_runtime.py"),
+        Path("apps/model_power_app_page.py"),
     ]:
-        if not path.exists():
-            continue
         tree = ast.parse(path.read_text())
         for node in ast.walk(tree):
             if isinstance(node, ast.keyword):
