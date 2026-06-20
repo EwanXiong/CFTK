@@ -22,6 +22,13 @@ def test_parse_sample_size_text_rejects_invalid_inputs(text):
         parse_sample_size_text(text)
 
 
+def test_parse_sample_size_text_rejects_public_sample_size_limit():
+    from apps.model_power_app_helpers import AppValidationError, parse_sample_size_text
+
+    with pytest.raises(AppValidationError, match="supports total sample sizes up to"):
+        parse_sample_size_text("2001")
+
+
 def test_parse_sample_size_range_generates_sorted_grid():
     from apps.model_power_app_helpers import parse_sample_size_range
 
@@ -158,6 +165,30 @@ def test_precision_mode_mapping():
         "n_templates": 10,
         "simulations_per_template": 20,
     }
+
+
+def test_workload_limit_rejects_oversized_public_request():
+    from apps.model_power_app_helpers import AppValidationError, workload_warning
+
+    with pytest.raises(AppValidationError, match="computational limit"):
+        workload_warning(
+            sample_sizes=(500, 1000, 1500, 2000),
+            depths=(10, 20, 30, 40),
+            n_templates=10,
+            simulations_per_template=20,
+        )
+
+
+def test_standard_default_only_warns():
+    from apps.model_power_app_helpers import workload_warning
+
+    warning = workload_warning(
+        sample_sizes=(50, 100, 150, 200),
+        depths=(10, 30),
+        n_templates=10,
+        simulations_per_template=20,
+    )
+    assert warning is not None
 
 
 def test_app_imports_public_discovery_grid_runner():
