@@ -1,5 +1,5 @@
 cfDNA Quality Control
-===============
+=====================
 
 The ``qc`` command runs quality-control for three cfDNA features.
 

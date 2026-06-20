@@ -1,5 +1,5 @@
 Configuration Setting
-====================
+=====================
 
 The example config is ``cftk_init.json`` at the CFTK repository. It is JSON and
 does not support comments.

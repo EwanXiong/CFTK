@@ -1,5 +1,5 @@
 Cell-free DNA Toolkit Documentation
-==================
+===================================
 .. toctree::
    :maxdepth: 2
    :hidden:
