@@ -33,7 +33,7 @@ Cell-free DNA Toolkit Documentation
 
 CFTK is a versatile cfDNA analysis toolkit designed for NGS based cfDNA Bisulfite-sequencing data processing. The workflow was organized for rawdata processing, data quality control, differential methylation analysis, fragmentomics analysis and multimodal machine learning modeling. We also provide a html report for result summarizing.
 
-The current workflow is driven by the ``cftk`` command implemented in ``cftk.py`` and controled by the user-prepared config file``cftk_init.json``.
+The current workflow is driven by the ``cftk`` command implemented in ``cftk.py`` and controled by the user-prepared config file ``cftk_init.json``.
 
 .. image:: _static/cftk_workflow.png
    :alt: CFTK Workflow Overview
