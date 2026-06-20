@@ -29,6 +29,9 @@ dependencies = [
     "finaletoolkit>=0.9",
 ]
 
+[project.optional-dependencies]
+web = ["streamlit>=1.36"]
+
 [project.scripts]
 cftk = "cftk.src.cftk:main"
 
