@@ -1,10 +1,10 @@
-Configuration Schema
+Configuration Setting
 ====================
 
-The example config is ``cftk_init.json`` at the repository root. It is JSON and
+The example config is ``cftk_init.json`` at the CFTK repository. It is JSON and
 does not support comments.
 
-Required Top-Level Keys
+Required Information
 -----------------------
 
 - ``project_name``
@@ -15,12 +15,13 @@ Required Top-Level Keys
 - ``process``
 - ``analysis``
 
-Required Reference Keys
+Required Reference
 -----------------------
 
 - ``genome_fa``
 - ``genome_2bit``
 - ``chrom_sizes``
+
 
 Comparison Format
 -----------------

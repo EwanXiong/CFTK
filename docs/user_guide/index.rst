@@ -11,6 +11,7 @@ features, perform differential analysis, model modalities, and generate reports.
    configuration
    processing
    quality_control
-   fragmentomics
    differential
-   modeling_reporting
+   fragmentomics
+   MESA_modeling
+   visualization_report

@@ -45,10 +45,10 @@ External Tools
 
 Many workflows call command-line tools that Python packaging does not install:
 
-- ``trim_galore`` or ``fastp``
-- ``bwameth.py`` or ``bismark``
-- ``sambamba``, ``samtools``, ``picard``, or ``samblaster``
-- ``MethylDackel`` or ``bismark_methylation_extractor``
+- ``trim_galore``
+- ``bwameth``
+- ``sambamba``, ``samtools``
+- ``MethylDackel``
 - ``bedtools``
 - ``multiqc``
 - ``DANPOS``

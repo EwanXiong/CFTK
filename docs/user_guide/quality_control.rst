@@ -1,34 +1,22 @@
-Quality Control
+cfDNA Quality Control
 ===============
 
-The ``qc`` command runs configured quality-control analyses.
+The ``qc`` command runs quality-control for three cfDNA features.
+
+1. Methylation distribution
+   Uses the merged CpG matrix from raw processing to visualize the methylation distribution in a β-     value density score. Validate the methylation quality in cfDNA samples.
+
+2. Fragment length distribution
+   Uses BAM files resolved from mark-duplicate outputs to generate a cfDNA fragent length distribution line plot. Validate the cfDNA fragment length peak range.
+
+3. Dinucleotide frequency
+   Requires ``reference_data.genome_fa`` and configured fragment settings.
 
 .. code-block:: bash
 
    python src/cftk.py --config cftk_init.json qc -s 1 2 3
 
-QC Steps
---------
 
-1. Methylation distribution
-   Uses the merged CpG matrix from raw processing.
-
-2. Fragment length distribution
-   Uses BAM files resolved from mark-duplicate outputs, alignment outputs, or
-   direct BAM paths in the sample config.
-
-3. Dinucleotide frequency
-   Requires ``reference_data.genome_fa`` and configured fragment settings.
-
-Visualization
--------------
-
-QC commands call the visualization layer after analysis. To regenerate plots
-from existing outputs without rerunning QC:
-
-.. code-block:: bash
-
-   python src/cftk.py --config cftk_init.json vis --mode qc
 
 Expected Output Location
 ------------------------
