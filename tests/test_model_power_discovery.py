@@ -1,5 +1,6 @@
 from pathlib import Path
 import sys
+import warnings
 
 import numpy as np
 import pandas as pd
@@ -8,7 +9,11 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
 from analysis.model_power import prepare_template_ensemble
-from analysis.model_power_discovery import run_power_sample_size_grid
+from analysis.model_power_discovery import (
+    _prepare_fold_features,
+    run_cv_discovery_power_analysis,
+    run_power_sample_size_grid,
+)
 
 
 def _reference_data(n_cpgs=120):
@@ -23,6 +28,38 @@ def _reference_data(n_cpgs=120):
         index=index,
     )
     return std, mean
+
+
+def test_float32_feature_ranking_does_not_overflow_when_replacing_inf():
+    y = np.array([0, 0, 0, 1, 1, 1], dtype=np.int8)
+    X_train = np.array(
+        [
+            [0.0, 0.1],
+            [0.0, 0.2],
+            [0.0, 0.3],
+            [1.0, 0.4],
+            [1.0, 0.5],
+            [1.0, 0.6],
+        ],
+        dtype=np.float32,
+    )
+    X_test = X_train[:2].copy()
+    is_signal = np.array([True, False])
+
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        result = _prepare_fold_features(
+            X_train,
+            y,
+            X_test,
+            is_signal,
+            min_observed_fraction=0.5,
+            top_k=1,
+        )
+
+    messages = [str(item.message) for item in caught]
+    assert not any("overflow encountered in cast" in message for message in messages)
+    assert result["X_train"].shape[1] == 1
 
 
 def test_cv_discovery_power_grid_returns_bounded_power():
@@ -58,6 +95,36 @@ def test_cv_discovery_power_grid_returns_bounded_power():
     assert len(curve) == 2
     assert curve["power"].between(0, 1).all()
     assert curve["n_templates"].eq(2).all()
+
+
+def test_thread_parallel_backend_is_explicit():
+    std, mean = _reference_data()
+    template = prepare_template_ensemble(
+        std,
+        mean,
+        n_templates=1,
+        template_kwargs={
+            "depth": [10],
+            "n_features": 40,
+            "n_signal_cpgs": 6,
+            "meth_diff": 0.04,
+            "effect_sd": 0.0,
+        },
+        random_state=7,
+    )[0]["template"]
+
+    result = run_cv_discovery_power_analysis(
+        template,
+        total_sample_size=24,
+        cv_folds=3,
+        top_k=5,
+        n_simulations=2,
+        n_jobs=2,
+        parallel_prefer="threads",
+        random_state=8,
+    )
+
+    assert result["analysis_metadata"]["parallel_backend"] == "threading"
 
 
 def test_negative_effect_direction_assigns_only_negative_signal_effects():
