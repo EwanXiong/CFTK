@@ -10,10 +10,16 @@ os.environ["PYTHONUTF8"] = "1"
 os.environ["PYTHONIOENCODING"] = "utf-8"
 os.environ["JOBLIB_MULTIPROCESSING"] = "0"
 if sys.platform == "darwin":
-    os.environ.setdefault("LANG", "en_US.UTF-8")
-    os.environ.setdefault("LC_ALL", "en_US.UTF-8")
-    os.environ.setdefault("LC_CTYPE", "en_US.UTF-8")
-for name in ("OMP_NUM_THREADS", "MKL_NUM_THREADS", "OPENBLAS_NUM_THREADS", "NUMEXPR_NUM_THREADS"):
+    # Override inherited invalid locale settings before importing NumPy/joblib.
+    os.environ["LANG"] = "en_US.UTF-8"
+    os.environ["LC_ALL"] = "en_US.UTF-8"
+    os.environ["LC_CTYPE"] = "en_US.UTF-8"
+for name in (
+    "OMP_NUM_THREADS",
+    "MKL_NUM_THREADS",
+    "OPENBLAS_NUM_THREADS",
+    "NUMEXPR_NUM_THREADS",
+):
     os.environ.setdefault(name, "1")
 
 ROOT = Path(__file__).resolve().parents[1]
