@@ -19,7 +19,7 @@ BLOCK_SIZE = 20
 N_JOBS = 1 if sys.platform == "darwin" else 2
 N_BOOTSTRAP = 300
 DETECTION_ALPHA = 0.05
-NULL_SIMULATIONS_BY_PRECISION = {"Fast": 20, "Standard": 50}
+NULL_SIMULATIONS_BY_PRECISION = {"Fast": 20, "Standard": 30}
 
 from analysis.model_power import load_default_model_power_reference, prepare_template_ensemble
 from analysis.model_power_operating_characteristics import run_power_sample_size_grid
