@@ -73,6 +73,19 @@ st.set_page_config(
     layout="wide",
 )
 
+st.markdown(
+    """
+    <style>
+    .block-container {
+        max-width: 1200px;
+        padding-left: 2rem;
+        padding-right: 2rem;
+    }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
+
 
 @st.cache_resource(show_spinner=False, max_entries=2)
 def load_available_depths(reference_dir: str) -> tuple[int | float, ...]:
@@ -486,24 +499,15 @@ def main() -> None:
                     ),
                 )
 
-        st.subheader("4. Computation and Display Settings")
-        comp_left, comp_middle, comp_right = st.columns(3)
+        st.subheader("4. Computation Settings")
+        comp_left, comp_right = st.columns(2)
         with comp_left:
             precision_mode = st.selectbox(
                 "Precision mode", list(PRECISION_MODES), index=0
             )
-        with comp_middle:
+        with comp_right:
             calculate_ci = st.checkbox(
                 "Calculate confidence interval", value=False
-            )
-        with comp_right:
-            plot_width = st.slider(
-                "Plot width (inches)",
-                min_value=6.0,
-                max_value=14.0,
-                value=9.0,
-                step=0.5,
-                help="Controls the rendered and exported Matplotlib figure width.",
             )
 
         submitted = st.form_submit_button("Calculate", type="primary")
@@ -616,17 +620,15 @@ def main() -> None:
 
         curve = result["power_curve"]
         st.subheader("Results")
-        fig, ax = plt.subplots(figsize=(float(plot_width), 5.5))
         fig, ax = plot_power_by_sample_size(
             curve,
             show_ci=calculate_ci,
             target_power=0.80,
             title="Model-development power by study size and sequencing depth",
-            ax=ax,
         )
         ax.set_ylabel("Probability of reaching target CV AUC")
         fig.tight_layout()
-        st.pyplot(fig, use_container_width=False)
+        st.pyplot(fig, use_container_width=True)
         plt.close(fig)
 
         has_ci = (
@@ -668,7 +670,6 @@ def main() -> None:
             "specificity_target": float(specificity_target),
             "sd_stat": sd_stat,
             "calculate_ci": bool(calculate_ci),
-            "plot_width_inches": float(plot_width),
         }
         metadata = result_metadata(
             user_inputs=user_inputs,
