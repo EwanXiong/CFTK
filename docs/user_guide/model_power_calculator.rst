@@ -77,7 +77,7 @@ Interactive App
 .. raw:: html
 
    <iframe
-      src="https://REPLACE-WITH-CFTK-APP.streamlit.app"
+      src="https://REPLACE-WITH-CFTK-APP.streamlit.app/?embed=true"
       width="100%"
       height="1300px"
       style="border: 0;"
