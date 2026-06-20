@@ -15,5 +15,4 @@ features, perform differential analysis, model modalities, and generate reports.
    fragmentomics
    MESA_modeling
    model_power
-   model_power_calculator
    visualization_report
