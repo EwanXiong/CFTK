@@ -8,7 +8,11 @@ __pycache__/
 docs/_build/
 docs/generated/
 
-# Local/generated model-power reference data; publish separately if needed.
-data/
+# Generated model-power reference arrays are committed for documentation demos.
+data/*
+!data/model_power/
+!data/model_power/**
+data/model_power/.ipynb_checkpoints/
+data/model_power/**/.ipynb_checkpoints/
 
 .DS_Store

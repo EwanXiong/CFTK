@@ -17,6 +17,7 @@ DEFAULT_STATS = ("mean", "CI_l", "CI_u")
 _STD_COLUMN_RE = re.compile(
     r"^(?P<depth>[0-9]+(?:\.[0-9]+)?)_(?P<stat>mean|CI_l|CI_u)$"
 )
+_CPG_INDEX_RE = re.compile(r"^chr(?P<chrom>[^_]+)_(?P<pos>[0-9]+)$")
 
 
 @dataclass(frozen=True)
@@ -76,6 +77,31 @@ def _parse_std_columns(columns: Sequence[object]) -> tuple[list[str], dict[str, 
     return depths, parsed
 
 
+def _split_cpg_index(index: pd.Index) -> tuple[np.ndarray, np.ndarray]:
+    chrom = np.empty(len(index), dtype=object)
+    pos = np.empty(len(index), dtype=np.uint32)
+
+    for row_idx, value in enumerate(index.astype(str)):
+        match = _CPG_INDEX_RE.match(value)
+        if match is None:
+            raise ValueError(
+                f"CpG index value {value!r} does not match expected chr<chrom>_<pos>."
+            )
+        position = int(match.group("pos"))
+        if position > np.iinfo(np.uint32).max:
+            raise ValueError(f"CpG index position is too large for uint32: {value!r}.")
+        chrom[row_idx] = match.group("chrom")
+        pos[row_idx] = position
+
+    return chrom.astype(str), pos
+
+
+def _join_cpg_index(chrom: np.ndarray, pos: np.ndarray) -> np.ndarray:
+    chrom = chrom.astype(str)
+    pos = pos.astype(str)
+    return np.char.add(np.char.add("chr", chrom), np.char.add("_", pos))
+
+
 def _read_mean(path: Path) -> pd.Series:
     mean = pd.read_pickle(path)
     if isinstance(mean, pd.DataFrame):
@@ -110,7 +136,7 @@ def convert_pickles_to_array_reference(
     Convert existing model-power pickles to shared-index NumPy arrays.
 
     The output layout is:
-      cpg_index.npy
+      cpg_index.npz
       cpg_mean.<dtype>.npy
       std_by_depth/depth_<depth>_mean.<dtype>.npy
       std_by_depth/depth_<depth>_CI.<dtype>.npy
@@ -146,10 +172,10 @@ def convert_pickles_to_array_reference(
     std_dir = output_dir / "std_by_depth"
     std_dir.mkdir(parents=True, exist_ok=True)
 
-    cpg_index = mean_index.to_numpy(dtype=str)
+    cpg_chrom, cpg_pos = _split_cpg_index(mean_index)
     mean_array = mean.to_numpy(dtype=array_dtype, copy=True)
 
-    np.save(output_dir / "cpg_index.npy", cpg_index)
+    np.savez_compressed(output_dir / "cpg_index.npz", chrom=cpg_chrom, pos=cpg_pos)
     np.save(output_dir / f"cpg_mean.{array_dtype.name}.npy", mean_array)
 
     std_files = {}
@@ -173,12 +199,13 @@ def convert_pickles_to_array_reference(
 
     manifest = {
         "format_version": FORMAT_VERSION,
-        "row_count": int(len(cpg_index)),
+        "row_count": int(len(cpg_chrom)),
         "depths": [_depth_manifest_value(depth) for depth in depths],
         "depth_labels": depths,
         "stats": list(DEFAULT_STATS),
         "dtype": array_dtype.name,
-        "index_file": "cpg_index.npy",
+        "index_file": "cpg_index.npz",
+        "index_format": "chrom_pos",
         "mean_file": f"cpg_mean.{array_dtype.name}.npy",
         "ci_columns": ["CI_l", "CI_u"],
         "std_files": std_files,
@@ -289,9 +316,21 @@ def load_model_power_reference(
                 output_columns[f"{depth}_{stat}"] = ci_matrix[:, ci_positions[stat]]
 
     if include_index:
-        cpg_index = np.load(reference_dir / manifest["index_file"], allow_pickle=False)
+        index_path = reference_dir / manifest["index_file"]
+        cpg_index_data = np.load(index_path, allow_pickle=False)
+        if isinstance(cpg_index_data, np.lib.npyio.NpzFile):
+            with cpg_index_data:
+                if {"chrom", "pos"}.issubset(cpg_index_data.files):
+                    cpg_index = _join_cpg_index(
+                        cpg_index_data["chrom"],
+                        cpg_index_data["pos"],
+                    )
+                else:
+                    cpg_index = cpg_index_data["cpg_index"]
+        else:
+            cpg_index = cpg_index_data
         if len(cpg_index) != row_count:
-            raise ValueError("cpg_index.npy row count does not match manifest.")
+            raise ValueError("CpG index row count does not match manifest.")
         index = pd.Index(cpg_index.astype(str), dtype=object)
     else:
         index = pd.RangeIndex(row_count)

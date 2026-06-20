@@ -1,0 +1,97 @@
+{
+  "ci_columns": [
+    "CI_l",
+    "CI_u"
+  ],
+  "depth_labels": [
+    "5",
+    "10",
+    "20",
+    "30",
+    "40",
+    "50",
+    "60",
+    "70",
+    "80",
+    "90",
+    "100"
+  ],
+  "depths": [
+    5,
+    10,
+    20,
+    30,
+    40,
+    50,
+    60,
+    70,
+    80,
+    90,
+    100
+  ],
+  "dtype": "float32",
+  "format_version": 1,
+  "index_file": "cpg_index.npz",
+  "index_format": "chrom_pos",
+  "mean_file": "cpg_mean.float32.npy",
+  "row_count": 3771981,
+  "source_files": {
+    "mean_pickle": "data/twistPanelCpG_mean_v1.pkl",
+    "std_pickle": "data/twistPanelCpG_std_v1.pkl"
+  },
+  "source_sha256": {
+    "mean_pickle": "d161ef9361a8f9e35b69687b41b4dfe43e0e06a61093d721c2b2934cf182ed40",
+    "std_pickle": "b19e318948f1e02b21a07f06f8b8a39a40096cb2d4f365f1952650902cecc4b6"
+  },
+  "stats": [
+    "mean",
+    "CI_l",
+    "CI_u"
+  ],
+  "std_files": {
+    "10": {
+      "CI": "std_by_depth/depth_10_CI.float32.npy",
+      "mean": "std_by_depth/depth_10_mean.float32.npy"
+    },
+    "100": {
+      "CI": "std_by_depth/depth_100_CI.float32.npy",
+      "mean": "std_by_depth/depth_100_mean.float32.npy"
+    },
+    "20": {
+      "CI": "std_by_depth/depth_20_CI.float32.npy",
+      "mean": "std_by_depth/depth_20_mean.float32.npy"
+    },
+    "30": {
+      "CI": "std_by_depth/depth_30_CI.float32.npy",
+      "mean": "std_by_depth/depth_30_mean.float32.npy"
+    },
+    "40": {
+      "CI": "std_by_depth/depth_40_CI.float32.npy",
+      "mean": "std_by_depth/depth_40_mean.float32.npy"
+    },
+    "5": {
+      "CI": "std_by_depth/depth_5_CI.float32.npy",
+      "mean": "std_by_depth/depth_5_mean.float32.npy"
+    },
+    "50": {
+      "CI": "std_by_depth/depth_50_CI.float32.npy",
+      "mean": "std_by_depth/depth_50_mean.float32.npy"
+    },
+    "60": {
+      "CI": "std_by_depth/depth_60_CI.float32.npy",
+      "mean": "std_by_depth/depth_60_mean.float32.npy"
+    },
+    "70": {
+      "CI": "std_by_depth/depth_70_CI.float32.npy",
+      "mean": "std_by_depth/depth_70_mean.float32.npy"
+    },
+    "80": {
+      "CI": "std_by_depth/depth_80_CI.float32.npy",
+      "mean": "std_by_depth/depth_80_mean.float32.npy"
+    },
+    "90": {
+      "CI": "std_by_depth/depth_90_CI.float32.npy",
+      "mean": "std_by_depth/depth_90_mean.float32.npy"
+    }
+  }
+}
