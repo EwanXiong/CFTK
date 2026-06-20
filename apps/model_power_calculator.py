@@ -589,32 +589,33 @@ def main() -> None:
                 f"Step {min(completed, total)}/{total}: {message}"
             )
 
-        result = calculate_power_grid(
-            str(REFERENCE_DIR),
-            tuple(depths),
-            int(n_features),
-            int(n_signal_cpgs),
-            float(meth_diff),
-            float(effect_sd),
-            effect_direction,
-            sd_stat,
-            float(within_block_rho),
-            BLOCK_SIZE,
-            precision["n_templates"],
-            TEMPLATE_SEED,
-            tuple(sample_sizes),
-            float(ratio),
-            int(cv_folds),
-            int(top_k),
-            float(min_observed_fraction),
-            float(target_auc),
-            float(specificity_target),
-            precision["simulations_per_template"],
-            ci_method,
-            n_bootstrap,
-            GRID_SEED,
-            _progress_callback=update_progress,
-        )
+        with st.spinner("Running model-development power simulation..."):
+            result = calculate_power_grid(
+                str(REFERENCE_DIR),
+                tuple(depths),
+                int(n_features),
+                int(n_signal_cpgs),
+                float(meth_diff),
+                float(effect_sd),
+                effect_direction,
+                sd_stat,
+                float(within_block_rho),
+                BLOCK_SIZE,
+                precision["n_templates"],
+                TEMPLATE_SEED,
+                tuple(sample_sizes),
+                float(ratio),
+                int(cv_folds),
+                int(top_k),
+                float(min_observed_fraction),
+                float(target_auc),
+                float(specificity_target),
+                precision["simulations_per_template"],
+                ci_method,
+                n_bootstrap,
+                GRID_SEED,
+                _progress_callback=update_progress,
+            )
         progress_bar.progress(1.0)
         progress_text.success("Calculation complete.")
 
