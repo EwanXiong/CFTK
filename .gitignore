@@ -8,11 +8,9 @@ __pycache__/
 docs/_build/
 docs/generated/
 
-# Generated model-power reference arrays are committed for documentation demos.
-data/*
-!data/model_power/
-!data/model_power/**
-data/model_power/.ipynb_checkpoints/
-data/model_power/**/.ipynb_checkpoints/
+# Generated model-power reference arrays and bundled reference assets are committed.
+data/*.pkl
+data/.ipynb_checkpoints/
+data/**/.ipynb_checkpoints/
 
 .DS_Store
