@@ -37,7 +37,7 @@ This checks required top-level sections, sample definitions, comparison group
 names, and required reference fields.
 
 3. The Help Commands
--------------------
+--------------------
 
 .. code-block:: bash
 
@@ -59,7 +59,7 @@ The major commands are:
 - ``run-all``: run the configured end-to-end workflow.
 
 4. Run Rawdata Processing
----------------------
+-------------------------
 
 After set up all the related paths in ``cftk_init.json``:
 
@@ -86,7 +86,7 @@ Examples:
 
 
 6. End-To-End Runs
----------------
+------------------
 
 The ``run-all`` command runs the configured pipeline end to end:
 
