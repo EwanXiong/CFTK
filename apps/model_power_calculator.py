@@ -6,8 +6,9 @@ import json
 import os
 from pathlib import Path
 import sys
+import time
 import traceback
-from typing import Any
+from typing import Any, Callable
 
 for _name in (
     "OMP_NUM_THREADS",
@@ -17,6 +18,7 @@ for _name in (
 ):
     os.environ.setdefault(_name, "1")
 
+import matplotlib.pyplot as plt
 import pandas as pd
 import streamlit as st
 
@@ -36,7 +38,6 @@ from apps.model_power_app_helpers import (  # noqa: E402
     EFFECT_DIRECTION_LABELS,
     PRECISION_MODES,
     PROBABILITY_COLUMNS,
-    RATIO_LABELS,
     SD_STAT_LABELS,
     AppValidationError,
     available_depths_from_manifest,
@@ -58,7 +59,6 @@ from apps.model_power_app_helpers import (  # noqa: E402
 )
 from visualization.plot_model_power import plot_power_by_sample_size  # noqa: E402
 
-
 REFERENCE_DIR = ROOT / "data"
 TEMPLATE_SEED = 20260617
 GRID_SEED = 20260618
@@ -66,6 +66,7 @@ BLOCK_SIZE = 20
 N_JOBS = 2
 N_BOOTSTRAP = 300
 
+ProgressCallback = Callable[[int, int, str], None]
 
 st.set_page_config(
     page_title="CFTK Model-Development Power Calculator",
@@ -73,19 +74,19 @@ st.set_page_config(
 )
 
 
-@st.cache_resource(show_spinner=False)
+@st.cache_resource(show_spinner=False, max_entries=2)
 def load_available_depths(reference_dir: str) -> tuple[int | float, ...]:
-    """Read available depth labels from the manifest without loading arrays."""
+    """Read available depth labels without loading the reference arrays."""
     return available_depths_from_manifest(reference_dir)
 
 
-@st.cache_resource(show_spinner="Loading CpG reference arrays...")
+@st.cache_resource(show_spinner=False, max_entries=4)
 def load_reference_data(
     reference_dir: str,
     depths: tuple[int | float, ...],
     sd_stat: str,
 ):
-    """Load only selected depth/stat reference arrays."""
+    """Load only the selected depth/stat reference arrays."""
     loaded = load_default_model_power_reference(
         reference_dir=reference_dir,
         depths=depths,
@@ -96,7 +97,7 @@ def load_reference_data(
     return loaded.cpg_std_summary, loaded.cpg_mean
 
 
-@st.cache_resource(show_spinner="Preparing simulation templates...")
+@st.cache_resource(show_spinner=False, max_entries=16)
 def prepare_templates(
     reference_dir: str,
     depths: tuple[int | float, ...],
@@ -111,7 +112,7 @@ def prepare_templates(
     n_templates: int,
     template_seed: int,
 ):
-    """Generate a cached template ensemble keyed by template-defining settings."""
+    """Generate a cached template ensemble keyed by biological assumptions."""
     cpg_std_summary, cpg_mean = load_reference_data(reference_dir, depths, sd_stat)
     template_kwargs = build_template_kwargs(
         depths=depths,
@@ -133,7 +134,17 @@ def prepare_templates(
     )
 
 
-@st.cache_data(show_spinner=False)
+def _notify(
+    callback: ProgressCallback | None,
+    completed: int,
+    total: int,
+    message: str,
+) -> None:
+    if callback is not None:
+        callback(completed, total, message)
+
+
+@st.cache_data(show_spinner=False, max_entries=32, ttl=24 * 60 * 60)
 def calculate_power_grid(
     reference_dir: str,
     depths: tuple[int | float, ...],
@@ -158,8 +169,18 @@ def calculate_power_grid(
     ci_method: str,
     n_bootstrap: int,
     grid_seed: int,
+    _progress_callback: ProgressCallback | None = None,
 ):
-    """Run the cached power-grid calculation."""
+    """Run the cached grid while reporting progress by sample-size point."""
+    started = time.perf_counter()
+    total_steps = len(sample_sizes) + 2
+
+    _notify(
+        _progress_callback,
+        0,
+        total_steps,
+        "Loading reference data and preparing CpG templates...",
+    )
     templates = prepare_templates(
         reference_dir,
         depths,
@@ -174,23 +195,100 @@ def calculate_power_grid(
         n_templates,
         template_seed,
     )
-    return run_power_sample_size_grid(
-        tuple(templates),
-        sample_sizes,
-        simulations_per_template=simulations_per_template,
-        power_kwargs=build_power_kwargs(
-            ratio=ratio,
-            cv_folds=cv_folds,
-            top_k=top_k,
-            min_observed_fraction=min_observed_fraction,
-            target_auc=target_auc,
-            specificity_target=specificity_target,
-        ),
-        ci_method=ci_method,
-        n_bootstrap=n_bootstrap,
-        n_jobs=N_JOBS,
-        random_state=grid_seed,
+    _notify(
+        _progress_callback,
+        1,
+        total_steps,
+        f"Prepared {n_templates} CpG templates.",
     )
+
+    power_kwargs = build_power_kwargs(
+        ratio=ratio,
+        cv_folds=cv_folds,
+        top_k=top_k,
+        min_observed_fraction=min_observed_fraction,
+        target_auc=target_auc,
+        specificity_target=specificity_target,
+    )
+
+    results = []
+    per_size_fits = (
+        n_templates
+        * simulations_per_template
+        * len(depths)
+        * cv_folds
+    )
+    for index, sample_size in enumerate(sample_sizes, start=1):
+        _notify(
+            _progress_callback,
+            index,
+            total_steps,
+            (
+                f"Simulating total N={sample_size} ({index}/{len(sample_sizes)}): "
+                f"approximately {per_size_fits:,} cross-validation fits."
+            ),
+        )
+        result = run_power_sample_size_grid(
+            tuple(templates),
+            (sample_size,),
+            simulations_per_template=simulations_per_template,
+            power_kwargs=power_kwargs,
+            ci_method=ci_method,
+            n_bootstrap=n_bootstrap,
+            n_jobs=N_JOBS,
+            random_state=int(
+                pd.util.hash_array(
+                    pd.array([grid_seed, sample_size], dtype="int64").to_numpy()
+                )[0]
+            ),
+        )
+        results.append(result)
+        _notify(
+            _progress_callback,
+            index + 1,
+            total_steps,
+            f"Completed total N={sample_size}.",
+        )
+
+    _notify(
+        _progress_callback,
+        total_steps - 1,
+        total_steps,
+        "Combining simulation results and calculating power summaries...",
+    )
+    replicate_results = pd.concat(
+        [result["replicate_results"] for result in results],
+        ignore_index=True,
+    )
+    template_summary = pd.concat(
+        [result["template_summary"] for result in results],
+        ignore_index=True,
+    )
+    power_curve = (
+        pd.concat([result["power_curve"] for result in results], ignore_index=True)
+        .sort_values(["model", "mean_depth", "sample_size"])
+        .reset_index(drop=True)
+    )
+
+    _notify(_progress_callback, total_steps, total_steps, "Calculation complete.")
+    return {
+        "replicate_results": replicate_results,
+        "template_summary": template_summary,
+        "power_curve": power_curve,
+        "run_metadata": {
+            "analysis_mode": "cv_discovery",
+            "sample_sizes": list(sample_sizes),
+            "n_templates": n_templates,
+            "simulations_per_template": simulations_per_template,
+            "total_study_simulations": (
+                n_templates * len(sample_sizes) * simulations_per_template
+            ),
+            "ci_method": ci_method,
+            "confidence": 0.95 if ci_method != "none" else None,
+            "n_bootstrap": n_bootstrap if ci_method == "hierarchical_bootstrap" else None,
+            "elapsed_seconds": time.perf_counter() - started,
+        },
+    }
 
 
 def _format_summary_table(curve: pd.DataFrame, *, include_ci: bool) -> pd.DataFrame:
@@ -283,26 +381,17 @@ def main() -> None:
             range_cols = st.columns(3)
             with range_cols[0]:
                 sample_start = st.number_input(
-                    "Start",
-                    min_value=1,
-                    value=50,
-                    step=10,
+                    "Start", min_value=1, value=50, step=10,
                     disabled=sample_input_mode != "Start / stop / step",
                 )
             with range_cols[1]:
                 sample_stop = st.number_input(
-                    "Stop",
-                    min_value=1,
-                    value=200,
-                    step=10,
+                    "Stop", min_value=1, value=200, step=10,
                     disabled=sample_input_mode != "Start / stop / step",
                 )
             with range_cols[2]:
                 sample_step = st.number_input(
-                    "Step",
-                    min_value=1,
-                    value=50,
-                    step=10,
+                    "Step", min_value=1, value=50, step=10,
                     disabled=sample_input_mode != "Start / stop / step",
                 )
         with design_right:
@@ -340,9 +429,7 @@ def main() -> None:
         biomarker_left, biomarker_right = st.columns(2)
         with biomarker_left:
             n_features = st.selectbox(
-                "Number of candidate CpGs",
-                [100, 250, 500, 1000, 2000],
-                index=2,
+                "Number of candidate CpGs", [100, 250, 500, 1000, 2000], index=2
             )
             n_signal_cpgs = st.number_input(
                 "Number of true signal CpGs",
@@ -371,40 +458,23 @@ def main() -> None:
             adv_left, adv_right = st.columns(2)
             with adv_left:
                 effect_sd = st.slider(
-                    "Effect-size SD",
-                    min_value=0.0,
-                    max_value=0.05,
-                    value=0.015,
-                    step=0.005,
-                    format="%.3f",
+                    "Effect-size SD", 0.0, 0.05, 0.015, 0.005, format="%.3f"
                 )
                 effect_label = st.selectbox(
-                    "Effect direction",
-                    list(EFFECT_DIRECTION_LABELS),
-                    index=0,
+                    "Effect direction", list(EFFECT_DIRECTION_LABELS), index=0
                 )
                 within_block_rho = st.slider(
-                    "Within-block correlation",
-                    min_value=0.0,
-                    max_value=0.8,
-                    value=0.20,
-                    step=0.05,
+                    "Within-block correlation", 0.0, 0.8, 0.20, 0.05
                 )
-                cv_folds = st.selectbox("Cross-validation folds", [3, 5, 10], index=1)
+                cv_folds = st.selectbox(
+                    "Cross-validation folds", [3, 5, 10], index=1
+                )
             with adv_right:
                 min_observed_fraction = st.slider(
-                    "Minimum observed fraction",
-                    min_value=0.30,
-                    max_value=0.90,
-                    value=0.50,
-                    step=0.05,
+                    "Minimum observed fraction", 0.30, 0.90, 0.50, 0.05
                 )
                 specificity_target = st.slider(
-                    "Specificity operating point",
-                    min_value=0.80,
-                    max_value=0.99,
-                    value=0.90,
-                    step=0.01,
+                    "Specificity operating point", 0.80, 0.99, 0.90, 0.01
                 )
                 sd_label = st.selectbox(
                     "SD uncertainty scenario",
@@ -416,16 +486,25 @@ def main() -> None:
                     ),
                 )
 
-        st.subheader("4. Computation Settings")
-        comp_left, comp_right = st.columns(2)
+        st.subheader("4. Computation and Display Settings")
+        comp_left, comp_middle, comp_right = st.columns(3)
         with comp_left:
             precision_mode = st.selectbox(
-                "Precision mode",
-                list(PRECISION_MODES),
-                index=0,
+                "Precision mode", list(PRECISION_MODES), index=0
+            )
+        with comp_middle:
+            calculate_ci = st.checkbox(
+                "Calculate confidence interval", value=False
             )
         with comp_right:
-            calculate_ci = st.checkbox("Calculate confidence interval", value=False)
+            plot_width = st.slider(
+                "Plot width (inches)",
+                min_value=6.0,
+                max_value=14.0,
+                value=9.0,
+                step=0.5,
+                help="Controls the rendered and exported Matplotlib figure width.",
+            )
 
         submitted = st.form_submit_button("Calculate", type="primary")
 
@@ -452,9 +531,7 @@ def main() -> None:
         n_bootstrap = N_BOOTSTRAP if calculate_ci else 0
 
         validate_class_counts(
-            sample_sizes=sample_sizes,
-            ratio=ratio,
-            cv_folds=int(cv_folds),
+            sample_sizes=sample_sizes, ratio=ratio, cv_folds=int(cv_folds)
         )
         validate_biomarker_inputs(
             n_features=int(n_features),
@@ -492,43 +569,65 @@ def main() -> None:
         if large_warning:
             st.warning(large_warning)
 
-        with st.spinner("Running model-development power simulation..."):
-            result = calculate_power_grid(
-                str(REFERENCE_DIR),
-                tuple(depths),
-                int(n_features),
-                int(n_signal_cpgs),
-                float(meth_diff),
-                float(effect_sd),
-                effect_direction,
-                sd_stat,
-                float(within_block_rho),
-                BLOCK_SIZE,
-                precision["n_templates"],
-                TEMPLATE_SEED,
-                tuple(sample_sizes),
-                float(ratio),
-                int(cv_folds),
-                int(top_k),
-                float(min_observed_fraction),
-                float(target_auc),
-                float(specificity_target),
-                precision["simulations_per_template"],
-                ci_method,
-                n_bootstrap,
-                GRID_SEED,
+        total_grid_jobs = len(sample_sizes) * precision["n_templates"]
+        st.caption(
+            f"Planned workload: {len(sample_sizes)} sample-size points × "
+            f"{precision['n_templates']} templates = {total_grid_jobs} grid jobs; "
+            f"{precision['simulations_per_template']} Monte Carlo studies per template."
+        )
+        progress_bar = st.progress(0)
+        progress_text = st.empty()
+
+        def update_progress(completed: int, total: int, message: str) -> None:
+            fraction = 0.0 if total <= 0 else min(max(completed / total, 0.0), 1.0)
+            progress_bar.progress(fraction)
+            progress_text.caption(
+                f"Step {min(completed, total)}/{total}: {message}"
             )
+
+        result = calculate_power_grid(
+            str(REFERENCE_DIR),
+            tuple(depths),
+            int(n_features),
+            int(n_signal_cpgs),
+            float(meth_diff),
+            float(effect_sd),
+            effect_direction,
+            sd_stat,
+            float(within_block_rho),
+            BLOCK_SIZE,
+            precision["n_templates"],
+            TEMPLATE_SEED,
+            tuple(sample_sizes),
+            float(ratio),
+            int(cv_folds),
+            int(top_k),
+            float(min_observed_fraction),
+            float(target_auc),
+            float(specificity_target),
+            precision["simulations_per_template"],
+            ci_method,
+            n_bootstrap,
+            GRID_SEED,
+            _progress_callback=update_progress,
+        )
+        progress_bar.progress(1.0)
+        progress_text.success("Calculation complete.")
 
         curve = result["power_curve"]
         st.subheader("Results")
+        fig, ax = plt.subplots(figsize=(float(plot_width), 5.5))
         fig, ax = plot_power_by_sample_size(
             curve,
             show_ci=calculate_ci,
             target_power=0.80,
             title="Model-development power by study size and sequencing depth",
+            ax=ax,
         )
         ax.set_ylabel("Probability of reaching target CV AUC")
-        st.pyplot(fig, use_container_width=True)
+        fig.tight_layout()
+        st.pyplot(fig, use_container_width=False)
+        plt.close(fig)
 
         has_ci = (
             calculate_ci
@@ -569,6 +668,7 @@ def main() -> None:
             "specificity_target": float(specificity_target),
             "sd_stat": sd_stat,
             "calculate_ci": bool(calculate_ci),
+            "plot_width_inches": float(plot_width),
         }
         metadata = result_metadata(
             user_inputs=user_inputs,
@@ -593,7 +693,7 @@ def main() -> None:
 
     except AppValidationError as exc:
         st.error(str(exc))
-    except Exception as exc:  # pragma: no cover - defensive UI path
+    except Exception:  # pragma: no cover - defensive UI path
         st.error(
             "The calculation could not be completed. Check the input settings "
             "or reduce the requested workload."
