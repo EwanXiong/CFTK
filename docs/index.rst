@@ -25,6 +25,13 @@ Cell-free DNA Toolkit Documentation
 .. toctree::
    :maxdepth: 1
    :hidden:
+   :caption: Interactive Tools
+
+   user_guide/model_power_calculator
+
+.. toctree::
+   :maxdepth: 1
+   :hidden:
    :caption: Project
 
    development
@@ -94,5 +101,3 @@ Please follow the guides below to explore more details about the CFTK package.
          ">Open report</a>
          <br>
          <a href="_static/sample_report.html" download style="color: #555; text-decoration: underline; font-size: 0.9em;">Download full report &gt;</a>
-
-
