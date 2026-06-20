@@ -309,10 +309,15 @@ def workload_warning(
     simulations_per_template: int,
     default_sample_sizes: Sequence[int] = (50, 100, 150, 200),
     default_depths: int = 2,
-    default_templates: int = 5,
-    default_simulations_per_template: int = 10,
+    default_templates: int | None = None,
+    default_simulations_per_template: int | None = None,
 ) -> str | None:
-    """Enforce a public workload budget and warn above the default workload."""
+    """Enforce the public workload limit and flag unusually expanded designs.
+
+    The warning baseline uses the selected precision mode's template and
+    simulation counts by default. This prevents normal Fast or Standard runs
+    from being mislabeled as unusually large after null calibration was added.
+    """
     sample_sizes = tuple(int(value) for value in sample_sizes)
     depths = tuple(depths)
     requested = (
@@ -321,12 +326,24 @@ def workload_warning(
         * int(n_templates)
         * int(simulations_per_template)
     )
+
+    baseline_templates = (
+        int(n_templates)
+        if default_templates is None
+        else int(default_templates)
+    )
+    baseline_simulations = (
+        int(simulations_per_template)
+        if default_simulations_per_template is None
+        else int(default_simulations_per_template)
+    )
     default = (
         sum(int(value) for value in default_sample_sizes)
         * int(default_depths)
-        * int(default_templates)
-        * int(default_simulations_per_template)
+        * baseline_templates
+        * baseline_simulations
     )
+
     if requested > MAX_PUBLIC_WORK_UNITS:
         raise AppValidationError(
             "This configuration exceeds the public calculator's computational "
@@ -334,8 +351,9 @@ def workload_warning(
         )
     if requested > 2 * default:
         return (
-            "This configuration is substantially larger than the default and "
-            "may run slowly on Streamlit Community Cloud."
+            "This configuration is substantially larger than the selected "
+            "precision mode's default workload and may run slowly on "
+            "Streamlit Community Cloud."
         )
     return None
 
