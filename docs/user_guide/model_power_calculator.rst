@@ -1,19 +1,65 @@
 Model-Development Power Calculator
 ==================================
 
-The CFTK model-development power calculator asks a study-design question:
-for a proposed liquid-biopsy biomarker-discovery cohort, what is the
-probability that the internal cross-validated model reaches a target AUC?
+The CFTK model-development power calculator evaluates whether a proposed
+liquid-biopsy biomarker-discovery cohort is likely to produce a useful and
+detectable internally cross-validated classifier.
 
-The reported primary endpoint is:
+The calculator reports three distinct operating characteristics. They answer
+different questions and should not be used interchangeably.
 
-.. code-block:: text
+Power Definitions
+-----------------
 
-   power = P(out-of-fold cross-validated AUC >= target AUC)
+Detection power
+~~~~~~~~~~~~~~~
 
-This is an internal model-development adequacy calculation. It does not
-estimate external cohort performance, and independent validation is still
-required before claims of generalizability.
+``detection_power`` is the probability that a simulated study rejects the
+no-discrimination null at the fixed significance level ``alpha = 0.05``.
+
+For every sample size, CpG template, model, and sequencing depth, CFTK creates
+a matched no-signal template in which case and control methylation
+distributions are identical. It then reruns the complete cross-validation
+pipeline on these null cohorts. For an observed out-of-fold AUC, the empirical
+upper-tail p-value is calculated as:
+
+.. math::
+
+   p = \frac{1 + \#\{AUC_{null} \geq AUC_{observed}\}}
+            {1 + B_{null}}
+
+where :math:`B_{null}` is the number of null simulations for that CpG template.
+Detection succeeds when ``p <= 0.05``.
+
+Target-attainment probability
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+``target_attainment_probability`` is:
+
+.. math::
+
+   P(AUC_{OOF} \geq AUC_{target})
+
+It answers whether the internally cross-validated classifier reaches the
+prespecified performance target, regardless of whether the observed AUC is
+statistically significant against the null distribution.
+
+Probability of success
+~~~~~~~~~~~~~~~~~~~~~~
+
+``probability_of_success`` is the conservative joint criterion:
+
+.. math::
+
+   P(p \leq \alpha \;\cap\; AUC_{OOF} \geq AUC_{target})
+
+A simulated study counts as successful only when it both detects
+no-discrimination departure and reaches the target AUC. Therefore,
+``probability_of_success`` cannot exceed either ``detection_power`` or
+``target_attainment_probability``. This is the default plot in the web app.
+
+Confidence intervals are uncertainty summaries around these metrics. A lower
+confidence bound is not a separate definition of power.
 
 Discovery Workflow
 ------------------
@@ -33,8 +79,32 @@ fold, CFTK applies the full biomarker-discovery workflow:
 9. combined out-of-fold AUC calculation.
 
 All preprocessing, feature ranking, feature selection, scaling, and model
-fitting are repeated inside each training fold. The public calculator uses
-logistic regression as a fixed model-development pipeline.
+fitting are repeated inside each training fold. The same complete workflow is
+used for signal studies and null-calibration studies. The public calculator
+uses logistic regression as a fixed model-development pipeline.
+
+Null Calibration
+----------------
+
+The null calibration preserves:
+
+- the sampled CpGs and their baseline methylation means;
+- depth-dependent CpG variance and missingness;
+- within-block feature correlation;
+- sample size and case-to-control ratio;
+- CV folds, filtering, imputation, feature ranking, feature selection, and
+  classifier settings.
+
+Only the case-control biological effect is removed. This full-pipeline null is
+preferred to applying an ordinary independent-sample ROC p-value directly to
+pooled out-of-fold predictions, because CV predictions arise from overlapping
+training sets.
+
+Fast mode uses 20 null simulations per CpG template. At ``alpha = 0.05``, this
+is the minimum practical empirical tail calibration and is intentionally
+coarse. Standard mode uses 50 null simulations per template and is preferred
+for final reporting. Larger offline analyses should use more null simulations
+when precise tail probabilities are required.
 
 User-Adjustable Assumptions
 ---------------------------
@@ -54,20 +124,22 @@ Sequencing depth enters through empirical CpG variance and missingness
 patterns derived from the bundled aggregate reference arrays. The calculator
 does not use or expose patient-level data.
 
-Interpreting Outputs
---------------------
+Interpreting Additional Outputs
+-------------------------------
 
-``power`` is the proportion of simulated studies whose out-of-fold
-cross-validated AUC reaches the selected target. ``mean_cv_auc`` summarizes
-the average internal CV AUC across simulated studies.
-
-Sensitivity at the selected specificity is reported as a secondary descriptive
-operating-point metric. It does not enter the primary power definition.
+``mean_cv_auc`` summarizes the average out-of-fold AUC across signal studies.
+``mean_null_auc_threshold`` summarizes the template-specific upper 5% null AUC
+thresholds. Sensitivity at the selected specificity is a secondary descriptive
+operating-point metric and does not define any of the three power metrics.
 
 Feature recall and precision are simulation diagnostics because the simulated
 true signal CpGs are known. Selection Jaccard summarizes fold-to-fold
 feature-set overlap and can help identify unstable feature selection in small
 or noisy designs.
+
+These outputs evaluate internal model-development adequacy. They do not
+estimate external cohort performance, and independent validation remains
+necessary before claims of clinical generalizability.
 
 Interactive App
 ---------------
@@ -90,7 +162,8 @@ Standalone app:
 Reproducibility
 ---------------
 
-The app provides downloads for the power curve, optional replicate-level
-results, and a settings JSON file. The settings export includes the user
-inputs, selected precision mode, deterministic seeds, and fixed computation
-settings needed to reproduce the calculation.
+The app provides downloads for the power curve, signal-study replicates,
+null-calibration replicates, and a settings JSON file. The settings export
+includes user inputs, the selected power definition, null-simulation count,
+precision mode, deterministic seeds, and fixed computation settings needed to
+reproduce the calculation.
