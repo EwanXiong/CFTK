@@ -10,6 +10,9 @@ The ``power`` output is the fraction of simulated studies whose CV AUC reaches
 ``target_auc``. It evaluates internal model-development adequacy and does not
 estimate external generalizability.
 
+For an interactive interface to this workflow, see
+:doc:`model_power_calculator`.
+
 The main functions are:
 
 - ``analysis.model_power.prepare_template_ensemble``

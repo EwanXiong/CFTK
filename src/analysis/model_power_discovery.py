@@ -72,6 +72,9 @@ def _prepare_fold_features(
 
     if top_k is not None and top_k < X_train.shape[1]:
         scores, _ = f_classif(X_train, y_train)
+        # f_classif may preserve float32 input. Cast before replacing +inf with
+        # float64 max to avoid NumPy's "overflow encountered in cast" warning.
+        scores = np.asarray(scores, dtype=np.float64)
         scores = np.nan_to_num(
             scores,
             nan=-np.inf,
@@ -329,6 +332,8 @@ def run_cv_discovery_power_analysis(
         raise ValueError("specificity_target must be between 0 and 1.")
     if n_simulations < 1:
         raise ValueError("n_simulations must be positive.")
+    if parallel_prefer not in {"threads", "processes"}:
+        raise ValueError("parallel_prefer must be 'threads' or 'processes'.")
 
     expected_cases = int(round(total_sample_size * ratio / (1.0 + ratio)))
     expected_controls = total_sample_size - expected_cases
@@ -357,7 +362,17 @@ def run_cv_discovery_power_analysis(
     children = np.random.SeedSequence(random_state).spawn(n_simulations)
     seeds = [int(child.generate_state(1, dtype=np.uint32)[0]) for child in children]
     start = time.perf_counter()
-    nested = Parallel(n_jobs=n_jobs, prefer=parallel_prefer)(
+
+    # The public app uses threads. Make that backend explicit rather than a
+    # soft preference so joblib never starts loky worker/resource-tracker
+    # processes on macOS or Streamlit Community Cloud.
+    parallel_kwargs: dict[str, Any]
+    if parallel_prefer == "threads":
+        parallel_kwargs = {"backend": "threading"}
+    else:
+        parallel_kwargs = {"prefer": "processes"}
+
+    nested = Parallel(n_jobs=n_jobs, **parallel_kwargs)(
         delayed(_run_one_replicate)(
             simulation=index,
             simulation_seed=seeds[index],
@@ -403,6 +418,9 @@ def run_cv_discovery_power_analysis(
             "elapsed_seconds": time.perf_counter() - start,
             "n_simulations": n_simulations,
             "paired_depths": paired_depths,
+            "parallel_backend": (
+                "threading" if parallel_prefer == "threads" else "processes"
+            ),
         },
     }
 

@@ -9,17 +9,13 @@ import numpy as np
 import pandas as pd
 
 
-def plot_power_by_sample_size(
+def _model_power_plot_data(
     power_curve: pd.DataFrame,
     *,
-    model: str = "logreg",
-    power_metric: str = "power",
-    show_ci: bool = False,
-    target_power: float | None = 0.80,
-    title: str | None = None,
-    ax=None,
-):
-    """Plot CV discovery power against total study sample size by depth."""
+    model: str,
+    power_metric: str,
+) -> pd.DataFrame:
+    """Validate and subset a model-power summary table for plotting."""
     required = {"model", "sample_size", "mean_depth", power_metric}
     missing = required - set(power_curve.columns)
     if missing:
@@ -32,9 +28,28 @@ def plot_power_by_sample_size(
     data = data.sort_values(["mean_depth", "sample_size"])
     if data.empty:
         raise ValueError(f"No rows were found for model={model!r}.")
+    return data
+
+
+def plot_power_by_sample_size(
+    power_curve: pd.DataFrame,
+    *,
+    model: str = "logreg",
+    power_metric: str = "power",
+    show_ci: bool = False,
+    target_power: float | None = 0.80,
+    title: str | None = None,
+    ax=None,
+):
+    """Plot CV discovery power against total study sample size with Matplotlib."""
+    data = _model_power_plot_data(
+        power_curve,
+        model=model,
+        power_metric=power_metric,
+    )
 
     if ax is None:
-        fig, ax = plt.subplots(figsize=(7, 5))
+        fig, ax = plt.subplots(figsize=(8, 5.5))
     else:
         fig = ax.figure
 

@@ -289,9 +289,9 @@ def prepare_model_power_template(
         raise ValueError("meth_diff and effect_sd must be non-negative.")
     if n_signal_cpgs > 0 and meth_diff == 0 and effect_sd == 0:
         raise ValueError("Signal CpGs cannot have zero effect magnitude.")
-    if effect_direction not in {"positive", "balanced", "random"}:
+    if effect_direction not in {"positive", "negative", "balanced", "random"}:
         raise ValueError(
-            "effect_direction must be 'positive', 'balanced', or 'random'."
+            "effect_direction must be 'positive', 'negative', 'balanced', or 'random'."
         )
     if sd_stat not in {"mean", "CI_l", "CI_u"}:
         raise ValueError("sd_stat must be 'mean', 'CI_l', or 'CI_u'.")
@@ -398,6 +398,8 @@ def prepare_model_power_template(
     if n_signal_cpgs > 0:
         if effect_direction == "positive":
             signs = np.ones(n_signal_cpgs, dtype=np.float64)
+        elif effect_direction == "negative":
+            signs = -np.ones(n_signal_cpgs, dtype=np.float64)
         elif effect_direction == "balanced":
             n_positive = (n_signal_cpgs + 1) // 2
             signs = np.concatenate(

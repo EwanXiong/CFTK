@@ -62,6 +62,13 @@ parser.add_argument(
     type=float,
     nargs=2,
     help="Methylation difference range for mode 2",
+)
+
+parser.add_argument(
+    "--depth",
+    dest="depth",
+    type=int,
+    nargs="+",
     default=[10, 20, 50],
     help="Read depths to analyze (default: [10, 20, 50])",
 )
