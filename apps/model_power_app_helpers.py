@@ -40,6 +40,9 @@ EFFECT_DIRECTION_LABELS = {
     "Random directions": "random",
 }
 
+MAX_TOTAL_SAMPLE_SIZE = 2000
+MAX_PUBLIC_WORK_UNITS = 500_000
+
 SUMMARY_COLUMNS = (
     "sample_size",
     "mean_depth",
@@ -133,6 +136,11 @@ def _normalize_sample_sizes(
     if len(unique) > max_points:
         raise AppValidationError(
             f"Select at most {max_points} sample-size points per request."
+        )
+    if max(unique) > MAX_TOTAL_SAMPLE_SIZE:
+        raise AppValidationError(
+            "The public calculator supports total sample sizes up to "
+            f"{MAX_TOTAL_SAMPLE_SIZE:,}. Reduce the largest sample size."
         )
     return ParsedSampleSizes(values=unique, warnings=tuple(warnings))
 
@@ -299,24 +307,31 @@ def workload_warning(
     depths: Sequence[int | float],
     n_templates: int,
     simulations_per_template: int,
-    default_sample_sizes: int = 4,
+    default_sample_sizes: Sequence[int] = (50, 100, 150, 200),
     default_depths: int = 2,
     default_templates: int = 5,
     default_simulations_per_template: int = 10,
 ) -> str | None:
-    """Warn when the requested run is substantially larger than the default."""
+    """Enforce a public workload budget and warn above the default workload."""
+    sample_sizes = tuple(int(value) for value in sample_sizes)
+    depths = tuple(depths)
     requested = (
-        len(tuple(sample_sizes))
-        * len(tuple(depths))
+        sum(sample_sizes)
+        * len(depths)
         * int(n_templates)
         * int(simulations_per_template)
     )
     default = (
-        int(default_sample_sizes)
+        sum(int(value) for value in default_sample_sizes)
         * int(default_depths)
         * int(default_templates)
         * int(default_simulations_per_template)
     )
+    if requested > MAX_PUBLIC_WORK_UNITS:
+        raise AppValidationError(
+            "This configuration exceeds the public calculator's computational "
+            "limit. Reduce the sample-size grid, selected depths, or precision mode."
+        )
     if requested > 2 * default:
         return (
             "This configuration is substantially larger than the default and "
