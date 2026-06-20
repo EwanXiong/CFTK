@@ -1,0 +1,279 @@
+{
+  "project_name": "Demo_project",
+  "output_dir": "path/to/your/output/dir",
+  "comparison": "Control_vs_Disease",
+  "samples": {
+    "Control": [
+      {
+        "name": "Control_1",
+        "input_type": "fastq",
+        "r1": "path/to/your/rawdata/c1.1.fastq.gz",
+        "r2": "path/to/your/rawdata/c1.2.fastq.gz"
+      },
+      {
+        "name": "Control_2",
+        "input_type": "fastq",
+        "r1": "path/to/your/rawdata/c2.1.fastq.gz",
+        "r2": "path/to/your/rawdata/c2.2.fastq.gz"
+      },
+      {
+        "name": "Control_3",
+        "input_type": "fastq",
+        "r1": "path/to/your/rawdata/c3.1.fastq.gz",
+        "r2": "path/to/your/rawdata/c3.2.fastq.gz"
+      },
+      {
+        "name": "Control_4",
+        "input_type": "fastq",
+        "r1": "path/to/your/rawdata/c4.1.fastq.gz",
+        "r2": "path/to/your/rawdata/c4.2.fastq.gz"
+      },
+      {
+        "name": "Control_5",
+        "input_type": "fastq",
+        "r1": "path/to/your/rawdata/c5.1.fastq.gz",
+        "r2": "path/to/your/rawdata/c5.2.fastq.gz"
+      }
+    ],
+    "Disease": [
+      {
+        "name": "Disease_1",
+        "input_type": "fastq",
+        "r1": "path/to/your/rawdata/d1.1.fastq.gz",
+        "r2": "path/to/your/rawdata/d1.2.fastq.gz"
+      },
+      {
+        "name": "Disease_2",
+        "input_type": "fastq",
+        "r1": "path/to/your/rawdata/d2.1.fastq.gz",
+        "r2": "path/to/your/rawdata/d2.2.fastq.gz"
+      },
+      {
+        "name": "Disease_3",
+        "input_type": "fastq",
+        "r1": "path/to/your/rawdata/d3.1.fastq.gz",
+        "r2": "path/to/your/rawdata/d3.2.fastq.gz"
+      },
+      {
+        "name": "Disease_4",
+        "input_type": "fastq",
+        "r1": "path/to/your/rawdata/d4.1.fastq.gz",
+        "r2": "path/to/your/rawdata/d4.2.fastq.gz"
+      },
+      {
+        "name": "Disease_5",
+        "input_type": "fastq",
+        "r1": "path/to/your/rawdata/d5.1.fastq.gz",
+        "r2": "path/to/your/rawdata/d5.2.fastq.gz"
+      }
+    ]
+  },
+  "reference_data": {
+    "genome_fa": "path/to/your/reference/hg38.fa",
+    "genome_2bit": "path/to/your/reference/hg38.2bit",
+    "chrom_sizes": "path/to/your/reference/hg38.autosomes.chrom.sizes",
+    "genome_build": "hg38",
+    "tss_pas_bed": "path/to/your/reference/hg38_annotated_collapsed_TSS_PAS_1kb.bed",
+    "ctcf_bed": "path/to/your/reference/GRCh38-cCREs.CA-CTCF.bed",
+    "blacklist": "path/to/your/reference/hg38-blacklist.v2.bed",
+    "gap": "path/to/your/reference/hg38_gap_filtered.bed",
+    "bins": "path/to/your/reference/hg38.5mb.bins.bed",
+    "cpg_std": "path/to/your/reference/twist_497sample_cpg_std.pkl"
+  },
+  "process": {
+    "parallel_samples": 10,
+    "step1_trimming": {
+      "tool": "trim_galore",
+      "params": {
+        "cores": 50,
+        "extra_args": ""
+      }
+    },
+    "step2_alignment": {
+      "tool": "bwameth",
+      "params": {
+        "cores": 50,
+        "extra_args": ""
+      }
+    },
+    "step3_markdup": {
+      "tool": "sambamba",
+      "params": {
+        "cores": 50,
+        "extra_args": ""
+      }
+    },
+    "step4_methylation": {
+      "tool": "methyldackel",
+      "params": {
+        "cores": 50,
+        "min_depth": 10,
+        "extra_args": ""
+      }
+    }
+  },"merge": {
+    "cpg": {
+      "groups": {
+        "Control": [
+          {
+            "name": "",
+            "type": "bedgraph",
+            "path": "results/1_process/4_methylation/Control_1_CpG.bedGraph"
+          }
+        ],
+        "Disease": [
+          {
+            "name": "",
+            "type": "bedgraph",
+            "path": "results/1_process/4_methylation/sALS_1_CpG.bedGraph"
+          }
+        ]
+      }
+    },
+    "occupancy": {
+      "groups": {
+        "Control": [
+          {
+            "name": "Control_1",
+            "type": "occupancy_tsv",
+            "path": "/path/to/Control_1.occupancy.tsv"
+          }
+        ],
+        "Disease": [
+          {
+            "name": "Disease_1",
+            "type": "occupancy_tsv",
+            "path": "/path/to/Disease_1.occupancy.tsv"
+          }
+        ]
+      }
+    }
+  },
+  "analysis": {
+    "qc": {
+      "params": {
+        "clip_r1": 0,
+        "clip_r2": 0,
+        "fragment": 167,
+        "step_size": 2000
+      }
+    },
+    "power": {
+      "params": {
+        "sample_size": 100,
+        "effect_size": 0.1,
+        "depth": [
+          10,
+          20,
+          50
+        ],
+        "ratio": 1.0,
+        "plot_threshold": 0.8,
+        "step_size": 10000
+      }
+    },
+    "diff": {
+      "params": {
+        "modalities": [
+          "cpg",
+          "occupancy",
+          "wps"
+        ],
+        "colors": [
+          "#4575b4",
+          "#d73027"
+        ],
+        "top_n_heatmap": 500
+      }
+    },
+    "dmr": {
+      "tool": "metilene",
+      "params": {
+        "cores": 50,
+        "q_thr": 0.05,
+        "top_n": 20,
+        "extra_args": ""
+      },
+      "samples": {
+        "Control": [
+          "Control_1",
+          "Control_2",
+          "Control_3",
+          "Control_4",
+          "Control_5"
+        ],
+        "Disease": [
+          "Disease_1",
+          "Disease_2",
+          "Disease_3",
+          "Disease_4",
+          "Disease_5"
+        ]
+      }
+    },
+    "frag": {
+      "occupancy": {
+        "tool": "path/to/DANPOS3/danpos.py",
+        "params": {
+          "extra_args": "--paired 1 -u 0 -c 1000000"
+        }
+      },
+      "wps": {
+        "params": {
+          "wps_window": 120,
+          "wps_step": 10,
+          "min_frag": 100,
+          "max_frag": 220
+        }
+      },
+      "delfi": {
+        "tool": "finaletoolkit",
+        "params": {
+          "mapq": 30,
+          "window": 20,
+          "extra_args": ""
+        }
+      },
+      "end_motif": {
+        "tool": "finaletoolkit",
+        "params": {
+          "kmer": 4,
+          "min_frag": 100,
+          "max_frag": 220,
+          "mapq": 30,
+          "extra_args": ""
+        }
+      },
+      "cleavage": {
+        "tool": "finaletoolkit",
+        "params": {
+          "min_frag": 100,
+          "max_frag": 220,
+          "mapq": 30,
+          "window": 20,
+          "upstream": 1500,
+          "downstream": 1500,
+          "extra_args": ""
+        }
+      }
+    },
+    "mesa": {
+      "params": {
+        "modalities": [
+          "cpg",
+          "occupancy",
+          "wps"
+        ],
+        "clf": [
+          1,
+          2,
+          3,
+          4
+        ],
+        "feature_size": 100,
+        "subset": 0.1,
+        "repeat": 3
+      }
+    }
+  }
+}
