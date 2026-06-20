@@ -58,3 +58,116 @@ def test_cv_discovery_power_grid_returns_bounded_power():
     assert len(curve) == 2
     assert curve["power"].between(0, 1).all()
     assert curve["n_templates"].eq(2).all()
+
+
+def test_negative_effect_direction_assigns_only_negative_signal_effects():
+    std, mean = _reference_data()
+    template = prepare_template_ensemble(
+        std,
+        mean,
+        n_templates=1,
+        template_kwargs={
+            "depth": [10],
+            "n_features": 50,
+            "n_signal_cpgs": 6,
+            "meth_diff": 0.04,
+            "effect_sd": 0.0,
+            "effect_direction": "negative",
+        },
+        random_state=12,
+    )[0]["template"]
+
+    signal_effects = template.raw_effect[template.is_signal]
+    null_effects = template.raw_effect[~template.is_signal]
+    assert np.all(signal_effects < 0)
+    assert np.all(null_effects == 0)
+
+
+def test_power_grid_preserves_equal_template_weighting():
+    std, mean = _reference_data()
+    templates = prepare_template_ensemble(
+        std,
+        mean,
+        n_templates=3,
+        template_kwargs={
+            "depth": [10],
+            "n_features": 50,
+            "n_signal_cpgs": 6,
+            "meth_diff": 0.04,
+            "effect_sd": 0.0,
+        },
+        random_state=13,
+    )
+
+    result = run_power_sample_size_grid(
+        templates,
+        sample_sizes=[30],
+        simulations_per_template=2,
+        power_kwargs={
+            "models": ("logreg",),
+            "cv_folds": 3,
+            "top_k": 5,
+            "target_auc": 0.70,
+        },
+        ci_method="none",
+        n_jobs=1,
+        random_state=14,
+    )
+
+    curve = result["power_curve"]
+    replicate = result["replicate_results"]
+    template_summary = result["template_summary"]
+    expected = template_summary["target_attainment_probability"].mean()
+
+    assert curve["n_templates"].iloc[0] == 3
+    assert curve["total_simulations"].iloc[0] == 6
+    assert replicate.groupby("template_id").size().nunique() == 1
+    assert curve["power"].iloc[0] == expected
+
+
+def test_power_grid_ci_columns_for_none_and_hierarchical_bootstrap():
+    std, mean = _reference_data()
+    templates = prepare_template_ensemble(
+        std,
+        mean,
+        n_templates=2,
+        template_kwargs={
+            "depth": [10],
+            "n_features": 50,
+            "n_signal_cpgs": 6,
+            "meth_diff": 0.04,
+            "effect_sd": 0.0,
+        },
+        random_state=15,
+    )
+    kwargs = {
+        "models": ("logreg",),
+        "cv_folds": 3,
+        "top_k": 5,
+        "target_auc": 0.70,
+    }
+
+    no_ci = run_power_sample_size_grid(
+        templates,
+        sample_sizes=[30],
+        simulations_per_template=2,
+        power_kwargs=kwargs,
+        ci_method="none",
+        n_jobs=1,
+        random_state=16,
+    )["power_curve"]
+    with_ci = run_power_sample_size_grid(
+        templates,
+        sample_sizes=[30],
+        simulations_per_template=2,
+        power_kwargs=kwargs,
+        ci_method="hierarchical_bootstrap",
+        n_bootstrap=100,
+        n_jobs=1,
+        random_state=16,
+    )["power_curve"]
+
+    assert no_ci[["power_ci_low", "power_ci_high"]].isna().all().all()
+    assert np.isfinite(with_ci[["power_ci_low", "power_ci_high"]].to_numpy()).all()
+    assert with_ci["power_ci_low"].between(0, 1).all()
+    assert with_ci["power_ci_high"].between(0, 1).all()
