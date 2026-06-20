@@ -10,6 +10,18 @@ import time
 import traceback
 from typing import Any, Callable
 
+# These variables are inherited by any interpreter that a dependency might
+# attempt to start. UTF-8 locale settings avoid macOS/Conda resource-tracker
+# startup failures, while JOBLIB_MULTIPROCESSING prevents process backends in
+# this Streamlit application.
+os.environ["PYTHONUTF8"] = "1"
+os.environ["PYTHONIOENCODING"] = "utf-8"
+os.environ["JOBLIB_MULTIPROCESSING"] = "0"
+if sys.platform == "darwin":
+    os.environ["LANG"] = "en_US.UTF-8"
+    os.environ["LC_ALL"] = "en_US.UTF-8"
+    os.environ["LC_CTYPE"] = "en_US.UTF-8"
+
 for _name in (
     "OMP_NUM_THREADS",
     "MKL_NUM_THREADS",
@@ -65,6 +77,44 @@ GRID_SEED = 20260618
 BLOCK_SIZE = 20
 N_JOBS = 2
 N_BOOTSTRAP = 300
+
+Y_AXIS_OPTIONS = {
+    "Conservative power (lower 95% CI)": {
+        "column": "power_ci_low",
+        "ylabel": "Conservative power (lower 95% CI)",
+        "requires_ci": True,
+    },
+    "Model-development power": {
+        "column": "power",
+        "ylabel": "Model-development power",
+        "requires_ci": False,
+    },
+    "Mean cross-validated AUC": {
+        "column": "mean_cv_auc",
+        "ylabel": "Mean cross-validated AUC",
+        "requires_ci": False,
+    },
+    "Sensitivity at selected specificity": {
+        "column": "mean_sensitivity_at_specificity",
+        "ylabel": "Sensitivity at selected specificity",
+        "requires_ci": False,
+    },
+    "Feature recall": {
+        "column": "mean_feature_recall",
+        "ylabel": "Mean feature recall",
+        "requires_ci": False,
+    },
+    "Feature precision": {
+        "column": "mean_feature_precision",
+        "ylabel": "Mean feature precision",
+        "requires_ci": False,
+    },
+    "Feature-selection stability (Jaccard)": {
+        "column": "mean_selection_jaccard",
+        "ylabel": "Mean selection Jaccard",
+        "requires_ci": False,
+    },
+}
 
 ProgressCallback = Callable[[int, int, str], None]
 
@@ -499,16 +549,39 @@ def main() -> None:
                     ),
                 )
 
-        st.subheader("4. Computation Settings")
-        comp_left, comp_right = st.columns(2)
+        st.subheader("4. Computation and Display Settings")
+        comp_left, comp_middle, comp_right = st.columns(3)
         with comp_left:
             precision_mode = st.selectbox(
                 "Precision mode", list(PRECISION_MODES), index=0
             )
-        with comp_right:
-            calculate_ci = st.checkbox(
-                "Calculate confidence interval", value=False
+        with comp_middle:
+            y_axis_label = st.selectbox(
+                "Y-axis metric",
+                list(Y_AXIS_OPTIONS),
+                index=0,
+                help=(
+                    "The conservative option plots the lower 95% confidence "
+                    "bound for model-development power."
+                ),
             )
+        y_axis_config = Y_AXIS_OPTIONS[y_axis_label]
+        with comp_right:
+            if y_axis_config["requires_ci"]:
+                calculate_ci = st.checkbox(
+                    "Calculate confidence interval",
+                    value=True,
+                    disabled=True,
+                    help="Required for the conservative lower-bound y-axis.",
+                    key="calculate_ci_required",
+                )
+                st.caption("CI calculation is required for this y-axis.")
+            else:
+                calculate_ci = st.checkbox(
+                    "Calculate confidence interval",
+                    value=False,
+                    key="calculate_ci_optional",
+                )
 
         submitted = st.form_submit_button("Calculate", type="primary")
 
@@ -531,8 +604,13 @@ def main() -> None:
         depths = validate_depth_selection(selected_depths)
         effect_direction = EFFECT_DIRECTION_LABELS[effect_label]
         sd_stat = SD_STAT_LABELS[sd_label]
-        ci_method = "hierarchical_bootstrap" if calculate_ci else "none"
-        n_bootstrap = N_BOOTSTRAP if calculate_ci else 0
+        effective_calculate_ci = bool(
+            calculate_ci or y_axis_config["requires_ci"]
+        )
+        ci_method = (
+            "hierarchical_bootstrap" if effective_calculate_ci else "none"
+        )
+        n_bootstrap = N_BOOTSTRAP if effective_calculate_ci else 0
 
         validate_class_counts(
             sample_sizes=sample_sizes, ratio=ratio, cv_folds=int(cv_folds)
@@ -620,20 +698,42 @@ def main() -> None:
         progress_text.success("Calculation complete.")
 
         curve = result["power_curve"]
+        y_metric = str(y_axis_config["column"])
+        if y_metric not in curve.columns or curve[y_metric].isna().all():
+            raise RuntimeError(
+                f"The selected y-axis metric {y_metric!r} is unavailable."
+            )
+
+        if y_metric in {"power", "power_ci_low"}:
+            target_line = 0.80
+        elif y_metric == "mean_cv_auc":
+            target_line = float(target_auc)
+        else:
+            target_line = None
+
+        show_ci_ribbon = effective_calculate_ci and y_metric == "power"
+
         st.subheader("Results")
         fig, ax = plot_power_by_sample_size(
             curve,
-            show_ci=calculate_ci,
-            target_power=0.80,
-            title="Model-development power by study size and sequencing depth",
+            power_metric=y_metric,
+            show_ci=show_ci_ribbon,
+            target_power=target_line,
+            title=f"{y_axis_label} by study size and sequencing depth",
         )
-        ax.set_ylabel("Probability of reaching target CV AUC")
+        ax.set_ylabel(str(y_axis_config["ylabel"]))
         fig.tight_layout()
         st.pyplot(fig, use_container_width=True)
         plt.close(fig)
 
+        if y_metric == "power_ci_low":
+            st.caption(
+                "Conservative power is the lower bound of the hierarchical "
+                "95% confidence interval for target-attainment probability."
+            )
+
         has_ci = (
-            calculate_ci
+            effective_calculate_ci
             and {"power_ci_low", "power_ci_high"}.issubset(curve.columns)
             and not curve[["power_ci_low", "power_ci_high"]].isna().all().all()
         )
@@ -670,7 +770,9 @@ def main() -> None:
             "min_observed_fraction": float(min_observed_fraction),
             "specificity_target": float(specificity_target),
             "sd_stat": sd_stat,
-            "calculate_ci": bool(calculate_ci),
+            "calculate_ci": effective_calculate_ci,
+            "y_axis_label": y_axis_label,
+            "y_axis_metric": y_metric,
         }
         metadata = result_metadata(
             user_inputs=user_inputs,
