@@ -2,8 +2,13 @@ __pycache__/
 *.py[cod]
 .pytest_cache/
 .mypy_cache/
+.ipynb_checkpoints/
+**/.ipynb_checkpoints/
 
 docs/_build/
 docs/generated/
+
+# Local/generated model-power reference data; publish separately if needed.
+data/
 
 .DS_Store
