@@ -145,20 +145,20 @@ necessary before claims of clinical generalizability.
 Interactive App
 ---------------
 
-.. Replace this placeholder after the Streamlit Community Cloud app is deployed.
-
 .. raw:: html
 
    <iframe
-      src="https://REPLACE-WITH-CFTK-APP.streamlit.app/?embed=true"
+      src="https://cftk-model-power.streamlit.app/?embed=true"
       width="100%"
-      height="1300px"
+      height="1600px"
       style="border: 0;"
+      loading="lazy"
       title="CFTK Model-Development Power Calculator">
    </iframe>
 
 Standalone app:
-`https://REPLACE-WITH-CFTK-APP.streamlit.app <https://REPLACE-WITH-CFTK-APP.streamlit.app>`__
+`Open the CFTK Model-Development Power Calculator
+<https://cftk-model-power.streamlit.app>`__
 
 Reproducibility
 ---------------
