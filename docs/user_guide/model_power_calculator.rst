@@ -1,9 +1,31 @@
-Model-Development Power Calculator
-==================================
+Model Power Calculator
+======================
 
-The CFTK model-development power calculator evaluates whether a proposed
-liquid-biopsy biomarker-discovery cohort is likely to produce a useful and
-detectable internally cross-validated classifier.
+The CFTK model power calculator evaluates whether a proposed liquid-biopsy
+biomarker-discovery cohort is likely to produce a useful and detectable
+internally cross-validated classifier.
+
+.. raw:: html
+
+   <iframe
+      src="https://cftk-model-power.streamlit.app/?embed=true"
+      width="100%"
+      height="1650px"
+      style="border: 0;"
+      loading="lazy"
+      title="CFTK Model Power Calculator">
+   </iframe>
+
+Standalone app:
+`Open the CFTK Model Power Calculator
+<https://cftk-model-power.streamlit.app>`__
+
+Section Navigation
+------------------
+
+.. contents::
+   :local:
+   :depth: 2
 
 The calculator reports three distinct operating characteristics. They answer
 different questions and should not be used interchangeably.
@@ -141,24 +163,6 @@ or noisy designs.
 These outputs evaluate internal model-development adequacy. They do not
 estimate external cohort performance, and independent validation remains
 necessary before claims of clinical generalizability.
-
-Interactive App
----------------
-
-.. raw:: html
-
-   <iframe
-      src="https://cftk-model-power.streamlit.app/?embed=true"
-      width="100%"
-      height="1600px"
-      style="border: 0;"
-      loading="lazy"
-      title="CFTK Model-Development Power Calculator">
-   </iframe>
-
-Standalone app:
-`Open the CFTK Model-Development Power Calculator
-<https://cftk-model-power.streamlit.app>`__
 
 Reproducibility
 ---------------
